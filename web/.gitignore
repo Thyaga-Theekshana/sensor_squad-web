@@ -1,2 +1,6 @@
 # Local Netlify folder
 .netlify
+
+# Local dependency artifacts
+node_modules/
+package-lock.json
