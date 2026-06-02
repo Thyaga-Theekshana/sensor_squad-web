@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ESP32 Weather Prediction</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>ESP32 Weather Prediction</h1>
+    <p>Use this page to call the local prediction API.</p>
+
+    <label for="apiUrl">API URL</label>
+    <input id="apiUrl" type="text" value="http://localhost:5000/predict" />
+
+    <label for="inputData">Sensor data JSON</label>
+    <textarea id="inputData" rows="10">{
+  "data": [
+    {
+      "datetime": "2026-06-02T12:00:00",
+      "temperature": 27.5,
+      "humidity": 65.0,
+      "pressure": 1012.3,
+      "rainfall": 0.0,
+      "light_intensity": 12000,
+      "wind_speed": 3.5,
+      "wind_direction": 90.0
+    }
+  ]
+}</textarea>
+
+    <button id="sendBtn">Send prediction request</button>
+
+    <h2>Response</h2>
+    <pre id="response" class="response-box"></pre>
+  </div>
+
+  <script src="esp32_prediction.js"></script>
+</body>
+</html>

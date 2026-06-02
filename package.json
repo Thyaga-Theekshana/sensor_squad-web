@@ -1,0 +1,16 @@
+{
+  "name": "whether-and-airquality-prediction",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Weather and air quality prediction project with ESP32, Firebase, and a static web frontend.",
+  "scripts": {
+    "install": "npm install --workspace web",
+    "web-install": "npm install --workspace web",
+    "web-test": "npm --workspace web test",
+    "web-lint": "echo \"No lint task configured. Add frontend tooling if needed.\""
+  },
+  "workspaces": [
+    "web"
+  ],
+  "license": "MIT"
+}
