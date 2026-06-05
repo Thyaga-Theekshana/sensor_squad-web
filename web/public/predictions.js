@@ -1,6 +1,8 @@
 // predictions.js
 // SENSOR SQUAD - Predictive Analytics Dashboard Logic
 
+const backendPredictionEndpoint = 'http://127.0.0.1:8000/predict/weather';
+
 let currentData = {
     temp: 26.5,
     humidity: 62.0,
@@ -34,6 +36,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Bind Simulator Sliders
     setupSimulator();
+    // Bind local backend prediction form
+    setupPredictionForm();
 });
 
 // Clock updater
@@ -513,6 +517,135 @@ function renderForecastChart() {
             }
         }
     });
+}
+
+function setupPredictionForm() {
+    const form = document.getElementById('backendPredictionForm');
+    if (!form) return;
+
+    form.addEventListener('submit', handlePredictionFormSubmit);
+
+    const inputs = [
+        'predictTemperature',
+        'predictHumidity',
+        'predictPressure',
+        'predictAQI',
+        'predictPM25',
+        'predictLight'
+    ];
+
+    inputs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', clearPredictionError);
+        }
+    });
+}
+
+function setPredictionLoading(isLoading) {
+    const status = document.getElementById('backendPredictionStatus');
+    const submit = document.getElementById('predictionSubmitBtn');
+    if (submit) {
+        submit.disabled = isLoading;
+        submit.textContent = isLoading ? 'Predicting...' : 'Predict Now';
+    }
+    if (status) {
+        status.textContent = isLoading ? 'Sending values to local backend...' : '';
+        status.className = isLoading ? 'prediction-status loading' : 'prediction-status';
+    }
+}
+
+function displayPredictionError(message) {
+    const status = document.getElementById('backendPredictionStatus');
+    if (status) {
+        status.textContent = message;
+        status.className = 'prediction-status error';
+    }
+}
+
+function clearPredictionError() {
+    const status = document.getElementById('backendPredictionStatus');
+    if (status) {
+        status.textContent = '';
+        status.className = 'prediction-status';
+    }
+}
+
+function displayPredictionResults(result) {
+    const resultsWrapper = document.getElementById('predictionResults');
+    if (!resultsWrapper) return;
+
+    const predictedTemperature = result.predicted_temperature ?? result.temperature ?? result.temp ?? '--';
+    const predictedAQI = result.predicted_aqi ?? result.aqi ?? '--';
+    const predictedPM25 = result.predicted_pm25 ?? result.pm25 ?? '--';
+    const predictedAirQuality = result.predicted_air_quality ?? result.air_quality ?? result.aqi_category ?? '--';
+    const extraMessage = result.message || result.summary || '';
+
+    resultsWrapper.innerHTML = `
+        <div class="prediction-result-card">
+            <h4>Prediction Results</h4>
+            <div class="result-row"><span>Predicted Temperature</span><strong>${predictedTemperature}</strong></div>
+            <div class="result-row"><span>Predicted AQI</span><strong>${predictedAQI}</strong></div>
+            <div class="result-row"><span>Predicted PM2.5</span><strong>${predictedPM25}</strong></div>
+            <div class="result-row"><span>Air Quality</span><strong>${predictedAirQuality}</strong></div>
+            ${extraMessage ? `<div class="result-note">${extraMessage}</div>` : ''}
+        </div>
+    `;
+}
+
+async function handlePredictionFormSubmit(event) {
+    event.preventDefault();
+
+    const tempEl = document.getElementById('predictTemperature');
+    const humEl = document.getElementById('predictHumidity');
+    const pressureEl = document.getElementById('predictPressure');
+    const aqiEl = document.getElementById('predictAQI');
+    const pm25El = document.getElementById('predictPM25');
+    const lightEl = document.getElementById('predictLight');
+
+    if (!tempEl || !humEl || !pressureEl || !aqiEl || !pm25El || !lightEl) {
+        displayPredictionError('Prediction form fields are unavailable.');
+        return;
+    }
+
+    const payload = {
+        temperature: parseFloat(tempEl.value),
+        humidity: parseFloat(humEl.value),
+        pressure: parseFloat(pressureEl.value),
+        aqi: parseFloat(aqiEl.value),
+        pm25: parseFloat(pm25El.value),
+        light: parseFloat(lightEl.value)
+    };
+
+    if (Object.values(payload).some(value => Number.isNaN(value))) {
+        displayPredictionError('Please provide valid numeric values for all fields.');
+        return;
+    }
+
+    setPredictionLoading(true);
+    displayPredictionResults({});
+
+    try {
+        const response = await fetch(backendPredictionEndpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            throw new Error(`Server responded with ${response.status}`);
+        }
+
+        const data = await response.json();
+        setPredictionLoading(false);
+        displayPredictionResults(data);
+    } catch (error) {
+        console.error('Prediction request failed:', error);
+        setPredictionLoading(false);
+        displayPredictionError('Could not reach local backend at http://127.0.0.1:8000. Please start FastAPI and try again.');
+    }
 }
 
 // ==========================================
