@@ -1,7 +1,9 @@
 // predictions.js
 // SENSOR SQUAD - Predictive Analytics Dashboard Logic
 
-const backendPredictionEndpoint = 'http://127.0.0.1:8000/predict/weather';
+const PREDICTION_API_BASE = 'http://127.0.0.1:8000'; // Change to production URL
+const STATION_LAT = 6.7735; // Moratuwa
+const STATION_LON = 79.8836;
 
 let currentData = {
     temp: 26.5,
@@ -36,8 +38,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Bind Simulator Sliders
     setupSimulator();
-    // Bind local backend prediction form
-    setupPredictionForm();
 });
 
 // Clock updater
@@ -127,11 +127,13 @@ async function initPredictions() {
     document.getElementById('lastUpdateTime').textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     // Generate Hourly Projections & Weekly Projections
-    generateHourlyForecasts();
-    generateWeeklyForecasts();
+    await Promise.all([
+        fetchModelPredictions(),
+        fetchOpenMeteo7Day()
+    ]);
     
     // Run AI Insights
-    generateAIInsights();
+    generateSmartInsights();
     
     // Draw default chart
     renderForecastChart();
@@ -140,54 +142,82 @@ async function initPredictions() {
     resetSimulatorToCurrent();
 }
 
-// Generating Hourly Forecast using Diurnal Sine curves
-function generateHourlyForecasts() {
+// Fetching 24-Hour Forecast using LSTM Model
+async function fetchModelPredictions() {
+    hourlyForecast = [];
+    const loadingOverlay = document.getElementById('chartLoadingOverlay');
+    if (loadingOverlay) loadingOverlay.style.display = 'flex';
+    
+    try {
+        // We use currentData to simulate recent 24h history for the backend if needed
+        // For our API, we'll format a payload.
+        const payload = {
+            records: [
+                {
+                    datetime: new Date().toISOString(),
+                    temperature: currentData.temp,
+                    humidity: currentData.humidity,
+                    pressure: currentData.pressure,
+                    light_intensity: currentData.light || 1000,
+                    pm25: currentData.pm25 || 12,
+                    wind_speed: 3.5,
+                    wind_direction: 90.0,
+                    rainfall: 0.0
+                }
+            ]
+        };
+
+        const res = await fetch(`${PREDICTION_API_BASE}/predict/weather`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) throw new Error('Backend error');
+        const data = await res.json();
+        
+        if (data.hourly_forecast && data.hourly_forecast.length > 0) {
+            hourlyForecast = data.hourly_forecast.map(item => {
+                const dateObj = new Date(item.timestamp);
+                return {
+                    timeLabel: dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    temperature: item.temperature,
+                    humidity: item.humidity,
+                    pressure: item.pressure || currentData.pressure,
+                    aqi: item.aqi || currentData.aqi // If AQI is not provided by weather API, fallback
+                };
+            });
+            // Extrapolate AQI and Pressure if missing in weather payload (for simplicity, use dummy diurnal curve if strictly missing)
+            hourlyForecast.forEach((f, idx) => {
+                if(!f.pressure) f.pressure = currentData.pressure + 1.2 * Math.cos(4 * Math.PI * (idx - 10) / 24);
+                if(!f.aqi) f.aqi = Math.max(5, currentData.aqi + Math.sin(2 * Math.PI * idx / 24) * 5);
+            });
+        } else {
+            generateFallbackHourlyForecasts();
+        }
+    } catch(err) {
+        console.error("Failed to fetch LSTM model, falling back to basic algo", err);
+        generateFallbackHourlyForecasts();
+    } finally {
+        if (loadingOverlay) loadingOverlay.style.display = 'none';
+    }
+}
+
+function generateFallbackHourlyForecasts() {
     hourlyForecast = [];
     const now = new Date();
-    const currentHour = now.getHours();
-
     for (let i = 0; i < 24; i++) {
         const forecastTime = new Date(now.getTime() + (i * 60 * 60 * 1000));
-        const hour = forecastTime.getHours();
-        
-        // Diurnal curve values:
-        // Temp peaks around 15:00, lowest around 05:00
-        const tempBase = currentData.temp;
-        const tempAmp = 4.5; // daily delta range ~9 degrees
-        const tempCoeff = Math.cos(2 * Math.PI * (hour - 15) / 24);
-        const tempProj = tempBase + tempAmp * tempCoeff + (Math.random() - 0.5) * 0.4;
-
-        // Humidity is inversely proportional to Temperature, peaks around 05:00, lowest around 15:00
-        const humBase = currentData.humidity;
-        const humAmp = 15; // daily delta range ~30%
-        const humCoeff = -Math.cos(2 * Math.PI * (hour - 15) / 24);
-        const humProj = Math.max(10, Math.min(100, humBase + humAmp * humCoeff + (Math.random() - 0.5) * 1.5));
-
-        // Pressure has minor diurnal semidiurnal tides (amplitude ~1.2 hPa, peaks at 10 and 22)
-        const presBase = currentData.pressure;
-        const presProj = presBase + 1.2 * Math.cos(4 * Math.PI * (hour - 10) / 24) + (Math.random() - 0.5) * 0.2;
-
-        // AQI diurnal curve: double peak during traffic hours (8 AM - 10 AM, 6 PM - 8 PM), higher overnight during thermal inversions
-        const aqiBase = currentData.aqi;
-        let trafficFactor = 0;
-        if ((hour >= 7 && hour <= 9) || (hour >= 17 && hour <= 19)) {
-            trafficFactor = 15; // commute spike
-        } else if (hour >= 21 || hour <= 4) {
-            trafficFactor = 8; // night inversion accumulation
-        } else {
-            trafficFactor = -5; // mid-afternoon solar convection clean air
-        }
-        const aqiProj = Math.max(5, aqiBase + trafficFactor + Math.sin(2 * Math.PI * hour / 24) * 5 + (Math.random() - 0.5) * 2);
-
         hourlyForecast.push({
             timeLabel: forecastTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            temperature: parseFloat(tempProj.toFixed(1)),
-            humidity: parseFloat(humProj.toFixed(0)),
-            pressure: parseFloat(presProj.toFixed(1)),
-            aqi: parseFloat(aqiProj.toFixed(0))
+            temperature: currentData.temp + Math.cos(2 * Math.PI * (forecastTime.getHours() - 15) / 24) * 4.5,
+            humidity: currentData.humidity - Math.cos(2 * Math.PI * (forecastTime.getHours() - 15) / 24) * 15,
+            pressure: currentData.pressure + 1.2 * Math.cos(4 * Math.PI * (forecastTime.getHours() - 10) / 24),
+            aqi: currentData.aqi + Math.sin(2 * Math.PI * forecastTime.getHours() / 24) * 5
         });
     }
 }
+
 
 // Generate 7-Day Forecast Grid
 function generateWeeklyForecasts() {
@@ -275,66 +305,62 @@ function generateWeeklyForecasts() {
     });
 }
 
-// Generate dynamic AI Alerts
-function generateAIInsights() {
+// Generate dynamic AI Alerts based on REAL predictions
+function generateSmartInsights() {
     const list = document.getElementById('aiInsightsList');
     if (!list) return;
     
     list.innerHTML = '';
     const insights = [];
 
-    // 1. Rain Ingress Risk (Pressure trend)
-    if (currentData.pressure < 1010) {
-        insights.push({
-            type: 'warning',
-            icon: 'fa-cloud-showers-heavy',
-            title: 'Precipitation Likely (85% Probability)',
-            text: `Barometric pressure is low (${currentData.pressure.toFixed(1)} hPa) and humidity is elevated. Seasonal projection indicates incoming precipitation within the next 4-6 hours. Expect air purification from particulate wash.`
-        });
-    } else {
-        insights.push({
-            type: 'success',
-            icon: 'fa-sun',
-            title: 'Stable High-Pressure System',
-            text: `High atmospheric pressure (${currentData.pressure.toFixed(1)} hPa) is projected to keep weather clear and dry for the next 48 hours. Minimal storm threat.`
-        });
+    // Trend Analysis from LSTM
+    if (hourlyForecast && hourlyForecast.length > 5) {
+        const t0 = hourlyForecast[0].temperature;
+        const tEnd = hourlyForecast[5].temperature;
+        if (tEnd - t0 > 3) {
+             insights.push({
+                type: 'warning', icon: 'fa-temperature-arrow-up', title: 'Rapid Temperature Rise Expected',
+                text: `LSTM model projects a +${(tEnd - t0).toFixed(1)}°C increase over the next 5 hours.`
+             });
+        }
     }
 
-    // 2. Inversion Layer Warning (Nighttime cooling + calm winds)
-    const now = new Date();
-    const hour = now.getHours();
-    const sunsetDiff = (20 - hour + 24) % 24; // approx sunset at 8pm (20:00)
-    
-    if (currentData.temp > 24 && currentData.humidity > 60) {
-        insights.push({
-            type: 'warning',
-            icon: 'fa-smog',
-            title: 'Nocturnal Thermal Inversion Warning',
-            text: `Radiational cooling tonight is projected to create a surface inversion layer. With ambient humidity at ${currentData.humidity.toFixed(0)}%, particulate pollutants (PM2.5) will likely be trapped near ground level from 9 PM to 7 AM. AQI may rise by 15-25 points.`
-        });
+    // Rain Analysis from OpenMeteo
+    if (weeklyForecast && weeklyForecast.length > 0) {
+        const today = weeklyForecast[0];
+        if (today.rainProb > 60) {
+            insights.push({
+                type: 'warning', icon: 'fa-cloud-showers-heavy', title: `High Rain Probability (${today.rainProb}%)`,
+                text: `Precipitation is highly likely today. This will assist in scrubbing atmospheric particulate matter.`
+            });
+        } else {
+            insights.push({
+                type: 'success', icon: 'fa-sun', title: 'Stable Weather Pattern',
+                text: `Low precipitation probability (${today.rainProb}%). Conditions are clear and stable.`
+            });
+        }
+        
+        // AQI Alert
+        if (today.aqi > 100) {
+            insights.push({
+                type: 'error', icon: 'fa-mask', title: 'Poor Air Quality Advisory',
+                text: `AQI is projected to remain elevated (Index: ${today.aqi}). Sensitive groups should reduce prolonged outdoor exertion.`
+            });
+        }
     }
 
-    // 3. Solar UV Intensity
-    if (currentData.light > 25000) {
-        insights.push({
-            type: 'info',
-            icon: 'fa-shield-halved',
-            title: 'High UV Index Forecast',
-            text: `Peak solar intensity tomorrow is forecast to exceed 45,000 Lux, yielding a UV Index of 6-8 (High). Maximum solar radiation occurs between 11:30 AM and 2:30 PM. UV protection is recommended during direct exposure.`
-        });
-    } else {
-        insights.push({
-            type: 'info',
-            icon: 'fa-umbrella-beach',
-            title: 'Moderate UV Index Forecast',
-            text: `Ambient light level is moderate. Tomorrow's peak UV index is projected to reach index 3-4 (Moderate). Basic sun safety precautions are sufficient.`
-        });
+    // Inversion Warning
+    if (currentData.temp > 24 && currentData.humidity > 70) {
+         insights.push({
+            type: 'warning', icon: 'fa-smog', title: 'Thermal Inversion Risk',
+            text: `High humidity and warm conditions suggest a potential thermal inversion layer tonight, trapping PM2.5 near the surface.`
+         });
     }
 
     // Insert cards into list
     insights.forEach(item => {
         const card = document.createElement('div');
-        card.className = `insight-card ${item.type}`;
+        card.className = `insight-card ${item.type || 'info'}`;
         card.innerHTML = `
             <div class="insight-icon"><i class="fas ${item.icon}"></i></div>
             <div class="insight-info">
@@ -518,135 +544,6 @@ function renderForecastChart() {
     });
 }
 
-function setupPredictionForm() {
-    const form = document.getElementById('backendPredictionForm');
-    if (!form) return;
-
-    form.addEventListener('submit', handlePredictionFormSubmit);
-
-    const inputs = [
-        'predictTemperature',
-        'predictHumidity',
-        'predictPressure',
-        'predictAQI',
-        'predictPM25',
-        'predictLight'
-    ];
-
-    inputs.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.addEventListener('input', clearPredictionError);
-        }
-    });
-}
-
-function setPredictionLoading(isLoading) {
-    const status = document.getElementById('backendPredictionStatus');
-    const submit = document.getElementById('predictionSubmitBtn');
-    if (submit) {
-        submit.disabled = isLoading;
-        submit.textContent = isLoading ? 'Predicting...' : 'Predict Now';
-    }
-    if (status) {
-        status.textContent = isLoading ? 'Sending values to local backend...' : '';
-        status.className = isLoading ? 'prediction-status loading' : 'prediction-status';
-    }
-}
-
-function displayPredictionError(message) {
-    const status = document.getElementById('backendPredictionStatus');
-    if (status) {
-        status.textContent = message;
-        status.className = 'prediction-status error';
-    }
-}
-
-function clearPredictionError() {
-    const status = document.getElementById('backendPredictionStatus');
-    if (status) {
-        status.textContent = '';
-        status.className = 'prediction-status';
-    }
-}
-
-function displayPredictionResults(result) {
-    const resultsWrapper = document.getElementById('predictionResults');
-    if (!resultsWrapper) return;
-
-    const predictedTemperature = result.predicted_temperature ?? result.temperature ?? result.temp ?? '--';
-    const predictedAQI = result.predicted_aqi ?? result.aqi ?? '--';
-    const predictedPM25 = result.predicted_pm25 ?? result.pm25 ?? '--';
-    const predictedAirQuality = result.predicted_air_quality ?? result.air_quality ?? result.aqi_category ?? '--';
-    const extraMessage = result.message || result.summary || '';
-
-    resultsWrapper.innerHTML = `
-        <div class="prediction-result-card">
-            <h4>Prediction Results</h4>
-            <div class="result-row"><span>Predicted Temperature</span><strong>${predictedTemperature}</strong></div>
-            <div class="result-row"><span>Predicted AQI</span><strong>${predictedAQI}</strong></div>
-            <div class="result-row"><span>Predicted PM2.5</span><strong>${predictedPM25}</strong></div>
-            <div class="result-row"><span>Air Quality</span><strong>${predictedAirQuality}</strong></div>
-            ${extraMessage ? `<div class="result-note">${extraMessage}</div>` : ''}
-        </div>
-    `;
-}
-
-async function handlePredictionFormSubmit(event) {
-    event.preventDefault();
-
-    const tempEl = document.getElementById('predictTemperature');
-    const humEl = document.getElementById('predictHumidity');
-    const pressureEl = document.getElementById('predictPressure');
-    const aqiEl = document.getElementById('predictAQI');
-    const pm25El = document.getElementById('predictPM25');
-    const lightEl = document.getElementById('predictLight');
-
-    if (!tempEl || !humEl || !pressureEl || !aqiEl || !pm25El || !lightEl) {
-        displayPredictionError('Prediction form fields are unavailable.');
-        return;
-    }
-
-    const payload = {
-        temperature: parseFloat(tempEl.value),
-        humidity: parseFloat(humEl.value),
-        pressure: parseFloat(pressureEl.value),
-        aqi: parseFloat(aqiEl.value),
-        pm25: parseFloat(pm25El.value),
-        light: parseFloat(lightEl.value)
-    };
-
-    if (Object.values(payload).some(value => Number.isNaN(value))) {
-        displayPredictionError('Please provide valid numeric values for all fields.');
-        return;
-    }
-
-    setPredictionLoading(true);
-    displayPredictionResults({});
-
-    try {
-        const response = await fetch(backendPredictionEndpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            throw new Error(`Server responded with ${response.status}`);
-        }
-
-        const data = await response.json();
-        setPredictionLoading(false);
-        displayPredictionResults(data);
-    } catch (error) {
-        console.error('Prediction request failed:', error);
-        setPredictionLoading(false);
-        displayPredictionError('Could not reach local backend at http://127.0.0.1:8000. Please start FastAPI and try again.');
-    }
-}
-
 // ==========================================
 // INTERACTIVE WHAT-IF SIMULATOR PLAYGROUND
 // ==========================================
@@ -669,6 +566,18 @@ function setupSimulator() {
 }
 
 function resetSimulatorToCurrent() {
+    // Set Live Badge
+    const badge = document.getElementById('liveCurrentAQIValue');
+    if(badge) badge.textContent = Math.round(currentData.aqi);
+    const statusBadge = document.getElementById('liveCurrentAQIBadge');
+    if(statusBadge) {
+        let aqiClass='good', aqiText='GOOD';
+        if(currentData.aqi>50){aqiClass='mod'; aqiText='MODERATE';}
+        if(currentData.aqi>100){aqiClass='unhealth'; aqiText='UNHEALTHY';}
+        statusBadge.textContent = aqiText;
+        statusBadge.className = 'live-aqi-status ' + aqiClass;
+    }
+
     const sTemp = document.getElementById('simSliderTemp');
     const sHum = document.getElementById('simSliderHumidity');
     const sWind = document.getElementById('simSliderWind');

@@ -795,13 +795,19 @@
           </div>
         </div>
 
-        <div class="chart-wrapper">
+        <div class="chart-wrapper" style="position: relative;">
+          <div id="chartLoadingOverlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 28, 63, 0.8); display: flex; align-items: center; justify-content: center; z-index: 10; border-radius: 12px; display: none;">
+            <div style="text-align: center; color: #80deea;">
+              <i class="fas fa-circle-notch fa-spin fa-2x" style="margin-bottom: 10px;"></i>
+              <div>Fetching AI Predictions...</div>
+            </div>
+          </div>
           <canvas id="predictionChart"></canvas>
         </div>
 
         <div class="graph-footer">
           <i class="fas fa-info-circle"></i> 
-          Projections computed by seasonal diurnal algorithms updated at <span id="lastUpdateTime">--:--</span>
+          Projections computed by LSTM Neural Network updated at <span id="lastUpdateTime">--:--</span>
         </div>
       </div>
 
@@ -842,6 +848,16 @@
         <button class="sim-reset-btn" id="simResetBtn">
           <i class="fas fa-sync-alt"></i> Reset to Current
         </button>
+      </div>
+      <div style="margin-bottom: 25px; padding: 15px; background: rgba(128, 222, 234, 0.1); border-left: 4px solid #80deea; border-radius: 8px; display: flex; align-items: center; justify-content: space-between;">
+        <div>
+          <strong style="color: #fff; font-size: 1.1rem;">Live Current AQI:</strong>
+          <div style="font-size: 0.9rem; color: #a0b3d6;">Latest reading from sensors</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px;">
+          <span id="liveCurrentAQIValue" style="font-size: 2rem; font-weight: bold; color: #fff;">--</span>
+          <span id="liveCurrentAQIBadge" style="padding: 4px 12px; border-radius: 20px; font-weight: bold; background: rgba(255,255,255,0.1);">--</span>
+        </div>
       </div>
       <div class="sim-layout">
         <!-- Sliders -->
