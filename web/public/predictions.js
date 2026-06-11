@@ -44,10 +44,9 @@ document.addEventListener('DOMContentLoaded', function() {
 function updateClock() {
     const now = new Date();
     const timeStr = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     const clockEl = document.getElementById('currentTime');
     if (clockEl) {
-        clockEl.textContent = `${dateStr} | ${timeStr}`;
+        clockEl.textContent = timeStr;
     }
 }
 

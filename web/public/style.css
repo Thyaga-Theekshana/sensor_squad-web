@@ -10,6 +10,20 @@ body {
   background: linear-gradient(135deg, #0f1c3f 0%, #1a2b5f 100%);
   color: #fff;
   min-height: 100vh;
+  overflow-x: hidden;
+}
+
+img,
+canvas,
+svg {
+  max-width: 100%;
+  height: auto;
+}
+
+input,
+select,
+button {
+  font: inherit;
 }
 
 /* Navigation Bar */
@@ -414,14 +428,35 @@ body {
 /* Responsive Design */
 @media (max-width: 768px) {
   .navbar {
-    flex-direction: column;
-    gap: 15px;
-    padding: 15px;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 14px;
+    align-items: flex-start;
+  }
+
+  .nav-brand {
+    font-size: 1.1rem;
   }
   
   .nav-links {
+    display: flex;
     flex-wrap: wrap;
     justify-content: center;
+    gap: 8px;
+    width: 100%;
+    order: 3;
+  }
+
+  .nav-links a {
+    padding: 8px 10px;
+    font-size: 0.92rem;
+  }
+
+  .nav-info {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
   }
   
   .dashboard, .charts-page, .all-charts-page {
@@ -450,7 +485,18 @@ body {
     grid-template-columns: 1fr;
   }
   
-  .chart-wrapper {
-    height: 300px;
+  .chart-wrapper,
+  .chart-wrapper-sm {
+    height: 320px;
+  }
+
+  .graph-controls {
+    flex-wrap: wrap;
+  }
+
+  .time-select,
+  .refresh-btn {
+    width: 100%;
+    justify-content: center;
   }
 }
