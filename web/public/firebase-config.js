@@ -297,6 +297,19 @@ async function calculateAndSaveDailyAverages() {
     }
 }
 
+// Real sensor data is loaded via fetch_moratuwa_data.py → Firebase upload.
+// Do not seed synthetic data in production.
+async function seedSampleFirebaseDataIfEmpty() {
+    if (!firebaseInitialized || !db) return false;
+    const existing = await getLatestFromFirebase('weather_data', 1);
+    if (existing && existing.length > 0) return true;
+    console.warn(
+        'No Firebase sensor data found. Run from backend:\n' +
+        '  python fetch_moratuwa_data.py --start 2026-04-01 --firebase'
+    );
+    return false;
+}
+
 // Export Firebase functions
 if (typeof window !== 'undefined') {
     window.firebaseHelpers = {
@@ -304,6 +317,8 @@ if (typeof window !== 'undefined') {
         syncToFirebase,
         getLatestFromFirebase,
         calculateAndSaveDailyAverages,
-        firebaseInitialized
+        seedSampleFirebaseDataIfEmpty,
+        firebaseInitialized,
+        firebaseConfig
     };
 }

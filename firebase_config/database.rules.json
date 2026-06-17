@@ -1,0 +1,32 @@
+{
+  "rules": {
+    "weather_data": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "pollution_data": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "sensor_readings": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "metadata": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "alerts": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "trends": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "daily_averages": {
+      ".read": true,
+      ".write": "auth != null"
+    }
+  }
+}

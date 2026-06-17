@@ -6,6 +6,7 @@
   "scripts": {
     "bootstrap": "npm install",
     "web:install": "npm install --workspace web",
+    "web:dev": "npm --workspace web run dev",
     "web:test": "npm --workspace web test",
     "web:lint": "echo \"No lint task configured. Add frontend tooling if needed.\""
   },

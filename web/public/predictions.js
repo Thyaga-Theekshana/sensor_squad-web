@@ -1,9 +1,6 @@
-// predictions.js
-// SENSOR SQUAD - Predictive Analytics Dashboard Logic
+// predictions.js — ML-powered 24h + API 7-day forecasting
 
-const PREDICTION_API_BASE = 'http://127.0.0.1:8000'; // Change to production URL
-const STATION_LAT = 6.7735; // Moratuwa
-const STATION_LON = 79.8836;
+const PREDICTION_API_BASE = window.PREDICTION_API_URL || 'http://127.0.0.1:5001';
 
 let currentData = {
     temp: 26.5,
@@ -11,455 +8,562 @@ let currentData = {
     pressure: 1012.0,
     aqi: 42.0,
     pm25: 12.5,
-    light: 850
+    pm10: 18.0,
+    light: 850,
+    rainfall: 0,
+    windSpeed: 2.5
 };
 
 let hourlyForecast = [];
 let weeklyForecast = [];
 let chartInstance = null;
 let activeParam = 'temperature';
+let mlPredictions = null;
+let apiMeta = { modelLoaded: false, source: 'fallback' };
+let initRetryCount = 0;
 
-// Initialize Page
-document.addEventListener('DOMContentLoaded', function() {
-    console.log("Predictions Engine Initializing...");
-    
-    // Update live clock
+document.addEventListener('DOMContentLoaded', function () {
     updateClock();
     setInterval(updateClock, 1000);
-    
-    // Setup background floating particles
     createParticles();
-
-    // Fetch data and generate forecasts
-    initPredictions();
-    
-    // Bind Tab Click listeners
     setupTabListeners();
-
-    // Bind Simulator Sliders
     setupSimulator();
+    initPredictions();
 });
 
-// Clock updater
 function updateClock() {
     const now = new Date();
-    const timeStr = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const clockEl = document.getElementById('currentTime');
     if (clockEl) {
-        clockEl.textContent = timeStr;
+        clockEl.textContent = `${now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} | ${now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
     }
 }
 
-// Particle generator
 function createParticles() {
     const container = document.getElementById('particles');
     if (!container) return;
-    
-    const particleCount = 15;
-    for (let i = 0; i < particleCount; i++) {
+    for (let i = 0; i < 15; i++) {
         const particle = document.createElement('div');
         particle.className = 'particle';
-        
-        // Random styling
         const size = Math.random() * 8 + 4;
         particle.style.width = `${size}px`;
         particle.style.height = `${size}px`;
         particle.style.left = `${Math.random() * 100}vw`;
         particle.style.animationDelay = `${Math.random() * 15}s`;
         particle.style.animationDuration = `${Math.random() * 12 + 10}s`;
-        
         container.appendChild(particle);
     }
 }
 
-// Setup Chart.js tabs
 function setupTabListeners() {
-    const tabs = document.querySelectorAll('.chart-tab');
-    tabs.forEach(tab => {
-        tab.addEventListener('click', function() {
-            tabs.forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.chart-tab').forEach(tab => {
+        tab.addEventListener('click', function () {
+            document.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
             this.classList.add('active');
-            
             activeParam = this.getAttribute('data-param');
             renderForecastChart();
         });
     });
 }
 
-// Core Prediction Init
-async function initPredictions() {
-    console.log("Loading latest readings for forecasting calibration...");
-    
-    let firebaseLoaded = false;
-    
-    if (window.firebaseHelpers && window.firebaseHelpers.firebaseInitialized) {
-        try {
-            const weatherData = await getLatestFromFirebase('weather_data', 10);
-            const pollutionData = await getLatestFromFirebase('pollution_data', 10);
-            
-            if (weatherData && weatherData.length > 0) {
-                const latestW = weatherData[0];
-                if (latestW.temperature) currentData.temp = latestW.temperature;
-                if (latestW.humidity) currentData.humidity = latestW.humidity;
-                if (latestW.pressure) currentData.pressure = latestW.pressure;
-                if (latestW.light) currentData.light = latestW.light;
-                firebaseLoaded = true;
-            }
-            
-            if (pollutionData && pollutionData.length > 0) {
-                const latestP = pollutionData[0];
-                if (latestP.aqi) currentData.aqi = latestP.aqi;
-                if (latestP.pm25) currentData.pm25 = latestP.pm25;
-                firebaseLoaded = true;
-            }
-            
-            console.log("Firebase calibrated dashboard current base values:", currentData);
-        } catch (err) {
-            console.error("Error reading data for predictions calibration, using default states:", err);
-        }
-    } else {
-        console.warn("Firebase config not initialized yet, scheduling retry in 2 seconds...");
-        setTimeout(initPredictions, 2000);
-    }
+// ─── AQI helpers ───────────────────────────────────────────────
 
-    // Set last updated time
-    const now = new Date();
-    document.getElementById('lastUpdateTime').textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    // Generate Hourly Projections & Weekly Projections
-    await Promise.all([
-        fetchModelPredictions(),
-        fetchOpenMeteo7Day()
-    ]);
-    
-    // Run AI Insights
-    generateSmartInsights();
-    
-    // Draw default chart
-    renderForecastChart();
-
-    // Sync Simulator sliders to loaded database values initially
-    resetSimulatorToCurrent();
+function getAQICategory(aqi) {
+    if (aqi <= 50) return { level: 'GOOD', label: 'Good', color: '#00cc66', advice: 'Air quality is satisfactory. Ideal for outdoor activities.' };
+    if (aqi <= 100) return { level: 'MODERATE', label: 'Moderate', color: '#ffcc00', advice: 'Acceptable for most people. Sensitive groups should limit prolonged exertion.' };
+    if (aqi <= 150) return { level: 'SENSITIVE', label: 'Unhealthy for Sensitive Groups', color: '#ff9933', advice: 'Children, elderly, and those with respiratory issues should reduce outdoor activity.' };
+    if (aqi <= 200) return { level: 'UNHEALTHY', label: 'Unhealthy', color: '#ff6666', advice: 'Everyone may experience health effects. Limit outdoor exposure.' };
+    if (aqi <= 300) return { level: 'VERY UNHEALTHY', label: 'Very Unhealthy', color: '#cc3333', advice: 'Health alert — avoid outdoor activities. Use air purifiers indoors.' };
+    return { level: 'HAZARDOUS', label: 'Hazardous', color: '#990099', advice: 'Emergency conditions. Stay indoors with sealed windows.' };
 }
 
-// Fetching 24-Hour Forecast using LSTM Model
-async function fetchModelPredictions() {
-    hourlyForecast = [];
-    const loadingOverlay = document.getElementById('chartLoadingOverlay');
-    if (loadingOverlay) loadingOverlay.style.display = 'flex';
-    
-    try {
-        // We use currentData to simulate recent 24h history for the backend if needed
-        // For our API, we'll format a payload.
-        const payload = {
-            records: [
-                {
-                    datetime: new Date().toISOString(),
-                    temperature: currentData.temp,
-                    humidity: currentData.humidity,
-                    pressure: currentData.pressure,
-                    light_intensity: currentData.light || 1000,
-                    pm25: currentData.pm25 || 12,
-                    wind_speed: 3.5,
-                    wind_direction: 90.0,
-                    rainfall: 0.0
-                }
-            ]
+function pm25FromAQI(aqi) {
+    return Math.max(1, parseFloat((aqi * 0.28).toFixed(1)));
+}
+
+function updateCurrentAQIDisplay() {
+    const aqi = Math.round(currentData.aqi);
+    const cat = getAQICategory(aqi);
+    const pm25 = currentData.pm25 || pm25FromAQI(aqi);
+    const pm10 = currentData.pm10 || parseFloat((pm25 * 1.6).toFixed(1));
+
+    const valueEl = document.getElementById('currentAqiValue');
+    const badgeEl = document.getElementById('currentAqiBadge');
+    const labelEl = document.getElementById('currentAqiLabel');
+    const pm25El = document.getElementById('currentPm25');
+    const pm10El = document.getElementById('currentPm10');
+    const adviceEl = document.getElementById('currentAqiAdvice');
+    const ringEl = document.getElementById('currentAqiRing');
+    const cardEl = document.getElementById('currentAqiCard');
+
+    if (valueEl) valueEl.textContent = aqi;
+    if (badgeEl) {
+        badgeEl.textContent = cat.level;
+        badgeEl.style.background = cat.color + '22';
+        badgeEl.style.borderColor = cat.color;
+        badgeEl.style.color = cat.color;
+    }
+    if (labelEl) labelEl.textContent = cat.label;
+    if (pm25El) pm25El.textContent = pm25.toFixed(1);
+    if (pm10El) pm10El.textContent = pm10.toFixed(1);
+    if (adviceEl) adviceEl.textContent = cat.advice;
+    if (ringEl) {
+        const pct = Math.min(aqi / 300, 1);
+        ringEl.style.strokeDashoffset = 502 - pct * 502;
+        ringEl.style.stroke = cat.color;
+        ringEl.style.filter = `drop-shadow(0 0 8px ${cat.color})`;
+    }
+    if (cardEl) cardEl.style.borderColor = cat.color + '55';
+
+    const tempEl = document.getElementById('currentAqiTemp');
+    const humEl = document.getElementById('currentAqiHum');
+    if (tempEl) tempEl.textContent = `${currentData.temp.toFixed(1)} °C`;
+    if (humEl) humEl.textContent = `${currentData.humidity.toFixed(0)} %`;
+
+    document.querySelectorAll('.aqi-scale-item').forEach(item => {
+        const max = parseInt(item.dataset.max, 10);
+        const min = parseInt(item.dataset.min, 10);
+        item.classList.toggle('active', aqi >= min && aqi <= max);
+    });
+
+    const trendEl = document.getElementById('aqiTrendText');
+    if (trendEl && hourlyForecast.length > 6) {
+        const later = hourlyForecast[6].aqi;
+        const diff = later - aqi;
+        if (diff > 8) trendEl.innerHTML = `<i class="fas fa-arrow-trend-up"></i> Rising +${Math.round(diff)} by 6h (watch evening traffic)`;
+        else if (diff < -8) trendEl.innerHTML = `<i class="fas fa-arrow-trend-down"></i> Improving ${Math.round(diff)} by 6h`;
+        else trendEl.innerHTML = `<i class="fas fa-minus"></i> Stable over next 6 hours`;
+    }
+}
+
+function updateDataSourceBadge() {
+    const badge = document.getElementById('forecastSourceBadge');
+    if (!badge) return;
+    const ml = apiMeta.modelLoaded ? 'LSTM 24h' : 'Statistical 24h';
+    const week = apiMeta.sevenDaySource === 'open-meteo' ? 'Open-Meteo 7-day' : '7-day unavailable';
+    badge.className = apiMeta.modelLoaded ? 'source-badge ml' : 'source-badge fallback';
+    badge.innerHTML = `<i class="fas fa-satellite"></i> ${ml} · ${week} · Moratuwa`;
+}
+
+// ─── Firebase data ─────────────────────────────────────────────
+
+async function loadFirebaseData() {
+    if (!window.firebaseHelpers?.firebaseInitialized) {
+        if (initRetryCount < 8) {
+            initRetryCount++;
+            setTimeout(initPredictions, 2000);
+        }
+        return null;
+    }
+
+    const weatherData = await getLatestFromFirebase('weather_data', 48);
+    const pollutionData = await getLatestFromFirebase('pollution_data', 48);
+
+    if (weatherData?.length) {
+        const latestW = weatherData[0];
+        if (latestW.temperature != null) currentData.temp = latestW.temperature;
+        if (latestW.humidity != null) currentData.humidity = latestW.humidity;
+        if (latestW.pressure != null) currentData.pressure = latestW.pressure;
+        if (latestW.light != null) currentData.light = latestW.light;
+        if (latestW.rainfall != null) currentData.rainfall = latestW.rainfall;
+    }
+
+    if (pollutionData?.length) {
+        const latestP = pollutionData[0];
+        if (latestP.aqi != null) currentData.aqi = latestP.aqi;
+        if (latestP.pm25 != null) currentData.pm25 = latestP.pm25;
+        if (latestP.pm10 != null) currentData.pm10 = latestP.pm10;
+    }
+
+    return mergeHistoryRecords(weatherData || [], pollutionData || []);
+}
+
+function mergeHistoryRecords(weatherRows, pollutionRows) {
+    const byTs = {};
+
+    weatherRows.forEach(row => {
+        const ts = row.timestamp || row.id;
+        if (!ts) return;
+        byTs[ts] = {
+            datetime: new Date(ts).toISOString(),
+            timestamp: ts,
+            temperature: row.temperature ?? currentData.temp,
+            humidity: row.humidity ?? currentData.humidity,
+            pressure: row.pressure ?? currentData.pressure,
+            rainfall: row.rainfall ?? 0,
+            light_intensity: row.light ?? currentData.light,
+            wind_speed: row.wind_speed ?? currentData.windSpeed,
+            wind_direction: row.wind_direction ?? 180,
+            voc: 100,
+            pm2_5: currentData.pm25,
+            co2: 400
         };
+    });
 
-        const res = await fetch(`${PREDICTION_API_BASE}/predict/weather`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        if (!res.ok) throw new Error('Backend error');
-        const data = await res.json();
-        
-        if (data.hourly_forecast && data.hourly_forecast.length > 0) {
-            hourlyForecast = data.hourly_forecast.map(item => {
-                const dateObj = new Date(item.timestamp);
-                return {
-                    timeLabel: dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                    temperature: item.temperature,
-                    humidity: item.humidity,
-                    pressure: item.pressure || currentData.pressure,
-                    aqi: item.aqi || currentData.aqi // If AQI is not provided by weather API, fallback
-                };
-            });
-            // Extrapolate AQI and Pressure if missing in weather payload (for simplicity, use dummy diurnal curve if strictly missing)
-            hourlyForecast.forEach((f, idx) => {
-                if(!f.pressure) f.pressure = currentData.pressure + 1.2 * Math.cos(4 * Math.PI * (idx - 10) / 24);
-                if(!f.aqi) f.aqi = Math.max(5, currentData.aqi + Math.sin(2 * Math.PI * idx / 24) * 5);
-            });
-        } else {
-            generateFallbackHourlyForecasts();
+    pollutionRows.forEach(row => {
+        const ts = row.timestamp || row.id;
+        if (!ts) return;
+        if (!byTs[ts]) {
+            byTs[ts] = {
+                datetime: new Date(ts).toISOString(),
+                timestamp: ts,
+                temperature: currentData.temp,
+                humidity: currentData.humidity,
+                pressure: currentData.pressure,
+                rainfall: 0,
+                light_intensity: currentData.light,
+                wind_speed: currentData.windSpeed,
+                wind_direction: 180,
+                voc: 100,
+                pm2_5: row.pm25 ?? currentData.pm25,
+                co2: 400
+            };
         }
-    } catch(err) {
-        console.error("Failed to fetch LSTM model, falling back to basic algo", err);
-        generateFallbackHourlyForecasts();
-    } finally {
-        if (loadingOverlay) loadingOverlay.style.display = 'none';
+        if (row.pm25 != null) byTs[ts].pm2_5 = row.pm25;
+        if (row.aqi != null) byTs[ts].aqi = row.aqi;
+    });
+
+    return Object.values(byTs).sort((a, b) => a.timestamp - b.timestamp);
+}
+
+// ─── ML API ────────────────────────────────────────────────────
+
+async function fetchApiHealth() {
+    try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 4000);
+        const res = await fetch(`${PREDICTION_API_BASE}/health`, { signal: controller.signal });
+        clearTimeout(timer);
+        return res.ok ? await res.json() : null;
+    } catch {
+        return null;
     }
 }
 
-function generateFallbackHourlyForecasts() {
+async function postPredictionApi(path, body) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    const res = await fetch(`${PREDICTION_API_BASE}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {}),
+        signal: controller.signal
+    });
+    clearTimeout(timer);
+    return res.json();
+}
+
+async function fetchMLPrediction(historyRecords) {
+    const health = await fetchApiHealth();
+    if (!health?.model_loaded) {
+        apiMeta = { modelLoaded: false, source: 'fallback' };
+        return null;
+    }
+
+    try {
+        let json;
+        if (historyRecords?.length >= 3) {
+            json = await postPredictionApi('/predict', { data: historyRecords });
+        } else {
+            json = await postPredictionApi('/predict-from-firebase', {});
+        }
+        if (json.success && json.predictions) {
+            apiMeta = { modelLoaded: true, source: 'ml', horizon: json.predictions.forecast_horizon_hours || 48 };
+            return json.predictions;
+        }
+    } catch (err) {
+        console.warn('ML API unavailable:', err.message);
+    }
+
+    apiMeta = { modelLoaded: false, source: 'fallback' };
+    return null;
+}
+
+function buildHourlyFromML(ml, useFallbackOnly) {
     hourlyForecast = [];
     const now = new Date();
+    const mlTemp = ml?.temperature ?? currentData.temp;
+    const mlHum = ml?.humidity ?? currentData.humidity;
+    const mlPres = ml?.pressure ?? currentData.pressure;
+    const mlWind = ml?.wind_speed ?? currentData.windSpeed;
+    const mlRain = ml?.rainfall ?? 0;
+
     for (let i = 0; i < 24; i++) {
-        const forecastTime = new Date(now.getTime() + (i * 60 * 60 * 1000));
+        const forecastTime = new Date(now.getTime() + i * 3600000);
+        const hour = forecastTime.getHours();
+        const t = i / 23;
+
+        const diurnalTemp = 4.5 * Math.cos(2 * Math.PI * (hour - 15) / 24);
+        const diurnalHum = -15 * Math.cos(2 * Math.PI * (hour - 15) / 24);
+
+        const temp = useFallbackOnly
+            ? currentData.temp + diurnalTemp
+            : currentData.temp + (mlTemp - currentData.temp) * t + diurnalTemp * (1 - t * 0.5);
+
+        const humidity = useFallbackOnly
+            ? Math.max(10, Math.min(100, currentData.humidity + diurnalHum))
+            : Math.max(10, Math.min(100, currentData.humidity + (mlHum - currentData.humidity) * t + diurnalHum * (1 - t * 0.5)));
+
+        const pressure = useFallbackOnly
+            ? currentData.pressure + 1.2 * Math.cos(4 * Math.PI * (hour - 10) / 24)
+            : currentData.pressure + (mlPres - currentData.pressure) * t + 0.8 * Math.cos(4 * Math.PI * (hour - 10) / 24);
+
+        let trafficFactor = 0;
+        if ((hour >= 7 && hour <= 9) || (hour >= 17 && hour <= 19)) trafficFactor = 15;
+        else if (hour >= 21 || hour <= 4) trafficFactor = 8;
+        else trafficFactor = -5;
+
+        const windDispersion = Math.exp(-0.03 * (useFallbackOnly ? 10 : mlWind));
+        const rainWash = mlRain > 0.5 ? -12 : 0;
+        const aqi = Math.max(5, Math.round(
+            currentData.aqi + trafficFactor * windDispersion + rainWash + Math.sin(2 * Math.PI * hour / 24) * 4
+        ));
+
         hourlyForecast.push({
             timeLabel: forecastTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            temperature: currentData.temp + Math.cos(2 * Math.PI * (forecastTime.getHours() - 15) / 24) * 4.5,
-            humidity: currentData.humidity - Math.cos(2 * Math.PI * (forecastTime.getHours() - 15) / 24) * 15,
-            pressure: currentData.pressure + 1.2 * Math.cos(4 * Math.PI * (forecastTime.getHours() - 10) / 24),
-            aqi: currentData.aqi + Math.sin(2 * Math.PI * forecastTime.getHours() / 24) * 5
+            temperature: parseFloat(temp.toFixed(1)),
+            humidity: parseFloat(humidity.toFixed(0)),
+            pressure: parseFloat(pressure.toFixed(1)),
+            aqi
         });
     }
 }
 
-
-// Generate 7-Day Forecast Grid
-function generateWeeklyForecasts() {
+async function fetchSevenDayForecast() {
     weeklyForecast = [];
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const now = new Date();
+    try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 12000);
+        const res = await fetch(`${PREDICTION_API_BASE}/forecast/7day`, { signal: controller.signal });
+        clearTimeout(timer);
+        const json = await res.json();
 
-    const weatherStates = [
-        { type: 'sun', icon: 'fa-sun', desc: 'Sunny / Clear' },
-        { type: 'cloud-sun', icon: 'fa-cloud-sun', desc: 'Partly Cloudy' },
-        { type: 'cloud', icon: 'fa-cloud', desc: 'Overcast' },
-        { type: 'rain', icon: 'fa-cloud-showers-heavy', desc: 'Showers / Rain' },
-        { type: 'storm', icon: 'fa-bolt', desc: 'Thunderstorms' }
-    ];
-
-    for (let i = 0; i < 7; i++) {
-        const forecastDay = new Date(now.getTime() + (i * 24 * 60 * 60 * 1000));
-        const dayName = i === 0 ? 'Today' : days[forecastDay.getDay()];
-        
-        // Randomize weather states based on pressure (lower pressure = more rain)
-        let state;
-        const roll = Math.random() * 100;
-        if (currentData.pressure < 1008) {
-            // Low pressure: High chance of rain/storm
-            state = roll < 40 ? weatherStates[3] : (roll < 70 ? weatherStates[4] : weatherStates[2]);
-        } else if (currentData.pressure > 1015) {
-            // High pressure: Sunny / Partly cloudy
-            state = roll < 70 ? weatherStates[0] : weatherStates[1];
-        } else {
-            // Moderate pressure: mixed
-            state = roll < 30 ? weatherStates[0] : (roll < 65 ? weatherStates[1] : (roll < 90 ? weatherStates[2] : weatherStates[3]));
+        if (json.success && json.forecast?.days?.length) {
+            weeklyForecast = json.forecast.days.map(day => ({
+                day: day.day,
+                dateLabel: day.dateLabel,
+                icon: day.icon,
+                type: day.type,
+                desc: day.desc,
+                max: day.max,
+                min: day.min,
+                aqi: day.aqi,
+                precipitation_mm: day.precipitation_mm,
+                source: 'open-meteo'
+            }));
+            apiMeta.sevenDaySource = 'open-meteo';
+            apiMeta.sevenDayProvider = json.forecast.provider;
+            renderWeeklyGrid();
+            return true;
         }
-
-        // Adjust temp range based on weather state (rainy days are cooler)
-        let tempModifier = 0;
-        if (state.type === 'rain') tempModifier = -3;
-        if (state.type === 'storm') tempModifier = -5;
-        if (state.type === 'sun') tempModifier = 2;
-
-        const maxTemp = currentData.temp + tempModifier + Math.random() * 3;
-        const minTemp = currentData.temp - 8 + tempModifier + Math.random() * 2;
-        
-        // AQI range
-        let aqiVal = currentData.aqi + (Math.random() - 0.5) * 15;
-        // Storms scrub air, making AQI better
-        if (state.type === 'rain' || state.type === 'storm') aqiVal -= 12;
-        aqiVal = Math.max(10, Math.round(aqiVal));
-
-        weeklyForecast.push({
-            day: dayName,
-            dateLabel: forecastDay.toLocaleDateString([], { month: 'short', day: 'numeric' }),
-            icon: state.icon,
-            type: state.type,
-            desc: state.desc,
-            max: Math.round(maxTemp),
-            min: Math.round(minTemp),
-            aqi: aqiVal
-        });
+    } catch (err) {
+        console.warn('Open-Meteo 7-day forecast failed:', err.message);
     }
 
-    // Render Weekly Grid in UI
+    apiMeta.sevenDaySource = null;
+    const grid = document.getElementById('forecast7DayGrid');
+    if (grid) {
+        grid.innerHTML = `<div class="forecast-error"><i class="fas fa-exclamation-triangle"></i> 7-day forecast unavailable. Start the prediction API on port 5001.</div>`;
+    }
+    return false;
+}
+
+function renderWeeklyGrid() {
     const grid = document.getElementById('forecast7DayGrid');
     if (!grid) return;
-    
     grid.innerHTML = '';
+
     weeklyForecast.forEach(day => {
+        const aqiVal = day.aqi;
+        const aqiLabel = aqiVal != null ? `AQI ${Math.round(aqiVal)}` : 'AQI N/A';
+        const cat = aqiVal != null ? getAQICategory(aqiVal) : { color: '#a0b3d6' };
         let aqiClass = 'good';
-        if (day.aqi > 50) aqiClass = 'mod';
-        if (day.aqi > 100) aqiClass = 'unhealth';
+        if (aqiVal > 50) aqiClass = 'mod';
+        if (aqiVal > 100) aqiClass = 'unhealth';
+
+        const rainNote = day.precipitation_mm > 0 ? `<div class="forecast-rain"><i class="fas fa-tint"></i> ${day.precipitation_mm} mm</div>` : '';
 
         const card = document.createElement('div');
         card.className = `forecast-card ${day.day === 'Today' ? 'today' : ''}`;
         card.innerHTML = `
             <div class="forecast-day">${day.day}</div>
-            <div style="font-size: 0.8rem; color: #a0b3d6; margin-bottom: 5px;">${day.dateLabel}</div>
+            <div class="forecast-date">${day.dateLabel}</div>
             <div class="forecast-icon ${day.type}"><i class="fas ${day.icon}"></i></div>
-            <div style="font-size: 0.85rem; color: #80deea; margin-bottom: 12px; font-weight: 600;">${day.desc}</div>
+            <div class="forecast-desc">${day.desc}</div>
+            ${rainNote}
             <div class="forecast-temp">
                 <span class="max">${day.max}°</span>
                 <span class="min">${day.min}°</span>
             </div>
-            <span class="forecast-aqi ${aqiClass}">AQI ${day.aqi}</span>
+            <span class="forecast-aqi ${aqiClass}" style="border-color:${cat.color};color:${cat.color}">${aqiLabel}</span>
         `;
         grid.appendChild(card);
     });
 }
 
-// Generate dynamic AI Alerts based on REAL predictions
-function generateSmartInsights() {
+// ─── AI Insights (prediction-driven) ───────────────────────────
+
+function generateAIInsights() {
     const list = document.getElementById('aiInsightsList');
     if (!list) return;
-    
     list.innerHTML = '';
     const insights = [];
 
-    // Trend Analysis from LSTM
-    if (hourlyForecast && hourlyForecast.length > 5) {
-        const t0 = hourlyForecast[0].temperature;
-        const tEnd = hourlyForecast[5].temperature;
-        if (tEnd - t0 > 3) {
-             insights.push({
-                type: 'warning', icon: 'fa-temperature-arrow-up', title: 'Rapid Temperature Rise Expected',
-                text: `LSTM model projects a +${(tEnd - t0).toFixed(1)}�C increase over the next 5 hours.`
-             });
-        }
+    const maxAqiHour = hourlyForecast.reduce((best, h, i) => h.aqi > hourlyForecast[best].aqi ? i : best, 0);
+    const minAqiHour = hourlyForecast.reduce((best, h, i) => h.aqi < hourlyForecast[best].aqi ? i : best, 0);
+    const peakAqi = hourlyForecast[maxAqiHour]?.aqi ?? currentData.aqi;
+    const bestAqi = hourlyForecast[minAqiHour]?.aqi ?? currentData.aqi;
+    const avgTemp = hourlyForecast.reduce((s, h) => s + h.temperature, 0) / (hourlyForecast.length || 1);
+    const worstDay = weeklyForecast.reduce((w, d) => d.aqi > w.aqi ? d : w, weeklyForecast[0] || { aqi: 0, day: '—' });
+    const bestDay = weeklyForecast.reduce((b, d) => d.aqi < b.aqi ? d : b, weeklyForecast[0] || { aqi: 999, day: '—' });
+
+    if (apiMeta.modelLoaded) {
+        insights.push({
+            type: 'success',
+            icon: 'fa-robot',
+            title: 'LSTM Model Active (24h)',
+            text: `Hourly projections use your Moratuwa-trained LSTM (horizon ${apiMeta.horizon || 48}h). Weekly outlook uses live Open-Meteo forecasts.`
+        });
     }
 
-    // Rain Analysis from OpenMeteo
-    if (weeklyForecast && weeklyForecast.length > 0) {
-        const today = weeklyForecast[0];
-        if (today.rainProb > 60) {
-            insights.push({
-                type: 'warning', icon: 'fa-cloud-showers-heavy', title: `High Rain Probability (${today.rainProb}%)`,
-                text: `Precipitation is highly likely today. This will assist in scrubbing atmospheric particulate matter.`
-            });
-        } else {
-            insights.push({
-                type: 'success', icon: 'fa-sun', title: 'Stable Weather Pattern',
-                text: `Low precipitation probability (${today.rainProb}%). Conditions are clear and stable.`
-            });
-        }
-        
-        // AQI Alert
-        if (today.aqi > 100) {
-            insights.push({
-                type: 'error', icon: 'fa-mask', title: 'Poor Air Quality Advisory',
-                text: `AQI is projected to remain elevated (Index: ${today.aqi}). Sensitive groups should reduce prolonged outdoor exertion.`
-            });
-        }
+    if (apiMeta.sevenDaySource === 'open-meteo') {
+        const rainyDays = weeklyForecast.filter(d => d.precipitation_mm > 5);
+        insights.push({
+            type: rainyDays.length ? 'info' : 'success',
+            icon: 'fa-satellite-dish',
+            title: 'Open-Meteo 7-Day Forecast (Moratuwa)',
+            text: rainyDays.length
+                ? `Real forecast data shows rain on ${rainyDays.map(d => d.day).join(', ')} (${rainyDays.map(d => d.precipitation_mm + 'mm').join(', ')}). Data from ERA5/CAMS via open-meteo.com.`
+                : 'Seven-day outlook from Open-Meteo live forecast API for University of Moratuwa coordinates (6.796°N, 79.901°E).'
+        });
     }
 
-    // Inversion Warning
-    if (currentData.temp > 24 && currentData.humidity > 70) {
-         insights.push({
-            type: 'warning', icon: 'fa-smog', title: 'Thermal Inversion Risk',
-            text: `High humidity and warm conditions suggest a potential thermal inversion layer tonight, trapping PM2.5 near the surface.`
-         });
+    if (peakAqi > 100) {
+        insights.push({
+            type: 'warning',
+            icon: 'fa-lungs',
+            title: `AQI Peak Forecast: ${peakAqi} at ${hourlyForecast[maxAqiHour]?.timeLabel}`,
+            text: `Air quality may reach "${getAQICategory(peakAqi).label}" levels. Sensitive groups should avoid outdoor exertion around this window. Best air expected at ${hourlyForecast[minAqiHour]?.timeLabel} (AQI ${bestAqi}).`
+        });
+    } else if (peakAqi <= 50) {
+        insights.push({
+            type: 'success',
+            icon: 'fa-leaf',
+            title: 'Excellent Air Quality Expected',
+            text: `All 24 projected hours stay in the Good range (peak AQI ${peakAqi}). Safe for outdoor sports and ventilation.`
+        });
+    } else {
+        insights.push({
+            type: 'info',
+            icon: 'fa-wind',
+            title: `Moderate Air — Peak AQI ${peakAqi}`,
+            text: `Peak at ${hourlyForecast[maxAqiHour]?.timeLabel}, improving to ${bestAqi} by ${hourlyForecast[minAqiHour]?.timeLabel}. Generally acceptable for healthy adults.`
+        });
     }
 
-    // Insert cards into list
+    if (avgTemp > currentData.temp + 2) {
+        insights.push({
+            type: 'warning',
+            icon: 'fa-temperature-high',
+            title: 'Warming Trend Detected',
+            text: `Average projected temperature (${avgTemp.toFixed(1)}°C) is above current (${currentData.temp.toFixed(1)}°C). Heat may increase ozone formation — watch AQI in afternoon hours.`
+        });
+    } else if (avgTemp < currentData.temp - 2) {
+        insights.push({
+            type: 'info',
+            icon: 'fa-temperature-low',
+            title: 'Cooling Trend Ahead',
+            text: `Temperatures trending down to ~${avgTemp.toFixed(1)}°C average. Nighttime thermal inversions possible — particulates may accumulate before dawn.`
+        });
+    }
+
+    if (currentData.pressure < 1010 || mlPredictions?.rainfall > 0.3) {
+        insights.push({
+            type: 'info',
+            icon: 'fa-cloud-rain',
+            title: 'Precipitation Signal in Model',
+            text: `Pressure at ${currentData.pressure.toFixed(1)} hPa${mlPredictions?.rainfall > 0 ? ` with ${mlPredictions.rainfall.toFixed(1)} mm rain forecast` : ''}. Rain typically washes particulates — expect temporary AQI improvement after showers.`
+        });
+    }
+
+    insights.push({
+        type: worstDay.aqi > 100 ? 'warning' : 'info',
+        icon: 'fa-calendar-week',
+        title: `7-Day Outlook: Best ${bestDay.day}, Watch ${worstDay.day}`,
+        text: `Lowest weekly AQI ~${bestDay.aqi} (${bestDay.day}). Highest ~${worstDay.aqi} (${worstDay.day}, ${worstDay.desc}). Plan outdoor activities accordingly.`
+    });
+
     insights.forEach(item => {
         const card = document.createElement('div');
-        card.className = `insight-card ${item.type || 'info'}`;
+        card.className = `insight-card ${item.type}`;
         card.innerHTML = `
             <div class="insight-icon"><i class="fas ${item.icon}"></i></div>
-            <div class="insight-info">
-                <h4>${item.title}</h4>
-                <p>${item.text}</p>
-            </div>
+            <div class="insight-info"><h4>${item.title}</h4><p>${item.text}</p></div>
         `;
         list.appendChild(card);
     });
 }
 
-// Render Forecast Chart
+// ─── Init orchestration ──────────────────────────────────────────
+
+async function initPredictions() {
+    const history = await loadFirebaseData();
+    if (history === null) return;
+
+    mlPredictions = await fetchMLPrediction(history);
+    buildHourlyFromML(mlPredictions, !apiMeta.modelLoaded);
+    await fetchSevenDayForecast();
+
+    const now = new Date();
+    const lastUpdate = document.getElementById('lastUpdateTime');
+    if (lastUpdate) lastUpdate.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    updateCurrentAQIDisplay();
+    updateDataSourceBadge();
+    generateAIInsights();
+    renderForecastChart();
+    resetSimulatorToCurrent();
+}
+
+// ─── Chart ───────────────────────────────────────────────────────
+
 function renderForecastChart() {
     const canvas = document.getElementById('predictionChart');
     if (!canvas) return;
-
     const ctx = canvas.getContext('2d');
-    
-    // Destroy previous instance
-    if (chartInstance) {
-        chartInstance.destroy();
-    }
+    if (chartInstance) chartInstance.destroy();
 
     const labels = hourlyForecast.map(f => f.timeLabel);
-    let dataValues = [];
-    let borderCol = '#80deea';
-    let fillCol = '#80deea15';
-    let paramLabel = '';
+    const configs = {
+        temperature: { values: hourlyForecast.map(f => f.temperature), color: '#ff4757', label: 'Temperature (°C)', zero: false },
+        humidity: { values: hourlyForecast.map(f => f.humidity), color: '#3742fa', label: 'Humidity (%)', zero: false },
+        pressure: { values: hourlyForecast.map(f => f.pressure), color: '#1abc9c', label: 'Pressure (hPa)', zero: false },
+        aqi: { values: hourlyForecast.map(f => f.aqi), color: '#c792ea', label: 'Air Quality Index', zero: true }
+    };
+    const cfg = configs[activeParam] || configs.temperature;
+    const dataValues = cfg.values;
 
-    if (activeParam === 'temperature') {
-        dataValues = hourlyForecast.map(f => f.temperature);
-        borderCol = '#ff4757';
-        fillCol = '#ff475715';
-        paramLabel = 'Temperature (°C)';
-    } else if (activeParam === 'humidity') {
-        dataValues = hourlyForecast.map(f => f.humidity);
-        borderCol = '#3742fa';
-        fillCol = '#3742fa15';
-        paramLabel = 'Humidity (%)';
-    } else if (activeParam === 'pressure') {
-        dataValues = hourlyForecast.map(f => f.pressure);
-        borderCol = '#1abc9c';
-        fillCol = '#1abc9c15';
-        paramLabel = 'Pressure (hPa)';
-    } else if (activeParam === 'aqi') {
-        dataValues = hourlyForecast.map(f => f.aqi);
-        borderCol = '#c792ea';
-        fillCol = '#c792ea15';
-        paramLabel = 'Air Quality Index';
-    }
-
-    // Create confidence intervals upper/lower datasets for scientific effect
-    const upperLimit = dataValues.map(v => {
-        if (activeParam === 'temperature') return v + 1.5;
-        if (activeParam === 'humidity') return Math.min(100, v + 6);
-        if (activeParam === 'pressure') return v + 2.0;
-        if (activeParam === 'aqi') return v + 10;
-    });
-
-    const lowerLimit = dataValues.map(v => {
-        if (activeParam === 'temperature') return v - 1.5;
-        if (activeParam === 'humidity') return Math.max(0, v - 6);
-        if (activeParam === 'pressure') return v - 2.0;
-        if (activeParam === 'aqi') return Math.max(0, v - 10);
-    });
+    const margin = activeParam === 'pressure' ? 2 : activeParam === 'aqi' ? 10 : activeParam === 'humidity' ? 6 : 1.5;
+    const upperLimit = dataValues.map(v => activeParam === 'humidity' ? Math.min(100, v + margin) : v + margin);
+    const lowerLimit = dataValues.map(v => activeParam === 'humidity' ? Math.max(0, v - margin) : Math.max(0, v - margin));
 
     chartInstance = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: labels,
+            labels,
             datasets: [
+                { label: 'Upper', data: upperLimit, borderColor: 'transparent', backgroundColor: cfg.color + '06', fill: false, pointRadius: 0, tension: 0.4 },
+                { label: 'Lower', data: lowerLimit, borderColor: 'transparent', backgroundColor: cfg.color + '06', fill: '-1', pointRadius: 0, tension: 0.4 },
                 {
-                    label: 'Confidence Upper Limit',
-                    data: upperLimit,
-                    borderColor: 'transparent',
-                    backgroundColor: borderCol + '06',
-                    fill: false,
-                    pointRadius: 0,
-                    tension: 0.4
-                },
-                {
-                    label: 'Confidence Lower Limit',
-                    data: lowerLimit,
-                    borderColor: 'transparent',
-                    backgroundColor: borderCol + '06',
-                    fill: '-1', // fill space between Upper and Lower
-                    pointRadius: 0,
-                    tension: 0.4
-                },
-                {
-                    label: `${paramLabel} Forecast`,
+                    label: `${cfg.label} Forecast`,
                     data: dataValues,
-                    borderColor: borderCol,
-                    backgroundColor: fillCol,
+                    borderColor: cfg.color,
+                    backgroundColor: cfg.color + '15',
                     borderWidth: 3,
                     fill: true,
                     tension: 0.4,
-                    pointBackgroundColor: borderCol,
-                    pointBorderColor: '#ffffff',
+                    pointBackgroundColor: cfg.color,
+                    pointBorderColor: '#fff',
                     pointBorderWidth: 2,
                     pointRadius: 2,
                     pointHoverRadius: 6
@@ -469,126 +573,59 @@ function renderForecastChart() {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            interaction: {
-                intersect: false,
-                mode: 'index'
-            },
+            interaction: { intersect: false, mode: 'index' },
             plugins: {
                 legend: {
                     display: true,
                     position: 'top',
-                    labels: {
-                        color: '#ffffff',
-                        filter: function(item) {
-                            // Hide upper and lower limit legends
-                            return !item.text.includes('Confidence');
-                        }
-                    }
+                    labels: { color: '#fff', filter: item => !item.text.includes('Upper') && !item.text.includes('Lower') }
                 },
                 tooltip: {
                     backgroundColor: 'rgba(15, 25, 45, 0.9)',
-                    titleColor: '#ffffff',
-                    bodyColor: '#ffffff',
-                    borderColor: borderCol,
+                    titleColor: '#fff',
+                    bodyColor: '#fff',
+                    borderColor: cfg.color,
                     borderWidth: 1,
-                    callbacks: {
-                        label: function(context) {
-                            let label = context.dataset.label || '';
-                            if (label.includes('Confidence')) return null;
-                            if (label) {
-                                label += ': ';
-                            }
-                            if (context.parsed.y !== null) {
-                                label += context.parsed.y;
-                            }
-                            return label;
-                        }
-                    }
+                    callbacks: { label: ctx => ctx.dataset.label.includes('Forecast') ? `${ctx.dataset.label}: ${ctx.parsed.y}` : null }
                 }
             },
             scales: {
                 x: {
-                    grid: {
-                        color: 'rgba(255, 255, 255, 0.05)',
-                        borderDash: [5, 5]
-                    },
-                    ticks: {
-                        color: '#a0b3d6',
-                        maxRotation: 45
-                    },
-                    title: {
-                        display: true,
-                        text: 'Projection Timeline (Hours)',
-                        color: '#ffffff',
-                        font: { weight: 'bold' }
-                    }
+                    grid: { color: 'rgba(255,255,255,0.05)', borderDash: [5, 5] },
+                    ticks: { color: '#a0b3d6', maxRotation: 45, autoSkip: true, maxTicksLimit: 12 },
+                    title: { display: true, text: 'Next 24 Hours', color: '#fff', font: { weight: 'bold' } }
                 },
                 y: {
-                    grid: {
-                        color: 'rgba(255, 255, 255, 0.05)',
-                        borderDash: [5, 5]
-                    },
-                    ticks: {
-                        color: '#a0b3d6'
-                    },
-                    title: {
-                        display: true,
-                        text: paramLabel,
-                        color: '#ffffff',
-                        font: { weight: 'bold' }
-                    },
-                    beginAtZero: activeParam !== 'pressure'
+                    grid: { color: 'rgba(255,255,255,0.05)', borderDash: [5, 5] },
+                    ticks: { color: '#a0b3d6' },
+                    title: { display: true, text: cfg.label, color: '#fff', font: { weight: 'bold' } },
+                    beginAtZero: cfg.zero
                 }
             }
         }
     });
 }
 
-// ==========================================
-// INTERACTIVE WHAT-IF SIMULATOR PLAYGROUND
-// ==========================================
+// ─── Simulator (unchanged logic) ─────────────────────────────────
+
 function setupSimulator() {
-    const sliders = ['Temp', 'Humidity', 'Wind', 'Emission'];
-    
-    sliders.forEach(slider => {
+    ['Temp', 'Humidity', 'Wind', 'Emission'].forEach(slider => {
         const el = document.getElementById(`simSlider${slider}`);
-        if (el) {
-            el.addEventListener('input', runSimulation);
-        }
+        if (el) el.addEventListener('input', runSimulation);
     });
-
-    const resetBtn = document.getElementById('simResetBtn');
-    if (resetBtn) {
-        resetBtn.addEventListener('click', resetSimulatorToCurrent);
-    }
-
+    document.getElementById('simResetBtn')?.addEventListener('click', resetSimulatorToCurrent);
     runSimulation();
 }
 
 function resetSimulatorToCurrent() {
-    // Set Live Badge
-    const badge = document.getElementById('liveCurrentAQIValue');
-    if(badge) badge.textContent = Math.round(currentData.aqi);
-    const statusBadge = document.getElementById('liveCurrentAQIBadge');
-    if(statusBadge) {
-        let aqiClass='good', aqiText='GOOD';
-        if(currentData.aqi>50){aqiClass='mod'; aqiText='MODERATE';}
-        if(currentData.aqi>100){aqiClass='unhealth'; aqiText='UNHEALTHY';}
-        statusBadge.textContent = aqiText;
-        statusBadge.className = 'live-aqi-status ' + aqiClass;
-    }
-
     const sTemp = document.getElementById('simSliderTemp');
     const sHum = document.getElementById('simSliderHumidity');
     const sWind = document.getElementById('simSliderWind');
     const sEmission = document.getElementById('simSliderEmission');
-
     if (sTemp) sTemp.value = currentData.temp.toFixed(1);
     if (sHum) sHum.value = currentData.humidity.toFixed(0);
-    // Default wind speed calibration 
-    if (sWind) sWind.value = 12.0; 
-    if (sEmission) sEmission.value = 3; // normal activity
-
+    if (sWind) sWind.value = 12.0;
+    if (sEmission) sEmission.value = 3;
     runSimulation();
 }
 
@@ -598,139 +635,52 @@ function runSimulation() {
     const windVal = parseFloat(document.getElementById('simSliderWind')?.value || 10);
     const emissionVal = parseInt(document.getElementById('simSliderEmission')?.value || 3);
 
-    // Update value labels in UI
-    const lblTemp = document.getElementById('simValTemp');
-    if (lblTemp) lblTemp.textContent = tempVal.toFixed(1);
-    
-    const lblHum = document.getElementById('simValHumidity');
-    if (lblHum) lblHum.textContent = humVal;
+    document.getElementById('simValTemp').textContent = tempVal.toFixed(1);
+    document.getElementById('simValHumidity').textContent = humVal;
+    document.getElementById('simValWind').textContent = windVal.toFixed(1);
+    const emissionNames = ['Extremely Low', 'Low', 'Normal', 'High (Rush Hour)', 'Severe (Industrial/Peak)'];
+    document.getElementById('simValEmission').textContent = emissionNames[emissionVal - 1];
 
-    const lblWind = document.getElementById('simValWind');
-    if (lblWind) lblWind.textContent = windVal.toFixed(1);
-
-    const lblEmission = document.getElementById('simValEmission');
-    if (lblEmission) {
-        const emissionNames = ['Extremely Low', 'Low', 'Normal', 'High (Rush Hour)', 'Severe (Industrial/Peak)'];
-        lblEmission.textContent = emissionNames[emissionVal - 1];
-    }
-
-    // ==========================================
-    // PREDICTION ALGORITHM FOR SIMULATED AQI
-    // ==========================================
-    // Base pollutant emissions
     const emissionFactors = [12, 28, 48, 85, 135];
     const basePollutants = emissionFactors[emissionVal - 1];
-
-    // Temperature Inversion Layer effect: 
-    // Cold temperature combined with low wind traps air, increasing AQI
-    let thermalInversionFactor = 1.0;
-    if (tempVal < 18 && windVal < 8) {
-        // Temperature drop creates stronger inversion
-        thermalInversionFactor = 1.0 + ((18 - tempVal) * (8 - windVal) * 0.04);
-    }
-
-    // High temperature ozone formation effect:
-    // Temperatures above 28°C create photochemical ozone, adding directly to AQI
-    let ozoneFactor = 0;
-    if (tempVal > 28) {
-        ozoneFactor = (tempVal - 28) * 4.5 * (1.0 + (humVal / 200)); // Ozone is higher in heat
-    }
-
-    // Wind dispersion effect:
-    // Higher wind speed disperses particulates exponentially
-    // AQI = Base * e^(-0.05 * wind)
+    let thermalInversionFactor = (tempVal < 18 && windVal < 8) ? 1.0 + ((18 - tempVal) * (8 - windVal) * 0.04) : 1.0;
+    let ozoneFactor = tempVal > 28 ? (tempVal - 28) * 4.5 * (1.0 + humVal / 200) : 0;
     const dispersionCoeff = Math.exp(-0.04 * windVal);
+    let humiditySwelling = humVal > 70 ? 1.0 + ((humVal - 70) * 0.008) : 1.0;
 
-    // Humidity particle swelling:
-    // Extremely high humidity causes hydroscopic growth of particulates, increasing PM2.5/PM10 concentration measurements
-    let humiditySwelling = 1.0;
-    if (humVal > 70) {
-        humiditySwelling = 1.0 + ((humVal - 70) * 0.008);
-    }
+    let simulatedAQI = Math.max(5, Math.min(500, Math.round((basePollutants * thermalInversionFactor * dispersionCoeff * humiditySwelling) + ozoneFactor + 12)));
+    let simulatedPM25 = Math.max(1.0, parseFloat((simulatedAQI * (simulatedAQI > 150 ? 0.35 : 0.28) + humVal * 0.05).toFixed(1)));
 
-    // Calculate simulated AQI
-    let simulatedAQI = (basePollutants * thermalInversionFactor * dispersionCoeff * humiditySwelling) + ozoneFactor + 12;
-    simulatedAQI = Math.max(5, Math.min(500, Math.round(simulatedAQI)));
+    document.getElementById('simAQIValue').textContent = simulatedAQI;
+    document.getElementById('simPM25Value').textContent = simulatedPM25;
 
-    // PM2.5 calculation is correlated to AQI
-    let simulatedPM25 = simulatedAQI * 0.28 + (humVal * 0.05);
-    if (simulatedAQI > 150) simulatedPM25 = simulatedAQI * 0.35; // non-linear scaling at high levels
-    simulatedPM25 = Math.max(1.0, parseFloat(simulatedPM25.toFixed(1)));
-
-    // Update simulated result UI
-    const valueEl = document.getElementById('simAQIValue');
-    if (valueEl) valueEl.textContent = simulatedAQI;
-
-    const pm25El = document.getElementById('simPM25Value');
-    if (pm25El) pm25El.textContent = simulatedPM25;
-
-    // Update circle gauge
+    const cat = getAQICategory(simulatedAQI);
     const gaugeFill = document.getElementById('simGaugeFill');
     if (gaugeFill) {
-        // SVG circle perimeter is 440 (2 * pi * r where r=70 => 439.8)
-        const perimeter = 440;
-        const fillOffset = perimeter - (Math.min(500, simulatedAQI) / 500) * perimeter;
-        gaugeFill.style.strokeDashoffset = fillOffset;
-        
-        // Dynamic color
-        let color = '#2ed573'; // Good
-        if (simulatedAQI > 200) color = '#ff3333'; // Very Unhealthy
-        else if (simulatedAQI > 150) color = '#ff6666'; // Unhealthy
-        else if (simulatedAQI > 100) color = '#ff9933'; // Unhealthy for Sensitive
-        else if (simulatedAQI > 50) color = '#ffa726'; // Moderate
-        
-        gaugeFill.style.stroke = color;
-        gaugeFill.style.filter = `drop-shadow(0 0 6px ${color})`;
-        
-        const badge = document.getElementById('simStatusBadge');
-        if (badge) {
-            badge.style.borderColor = color;
-            badge.style.color = color;
-            badge.style.background = color + '20';
-            
-            let badgeText = 'GOOD';
-            if (simulatedAQI > 300) badgeText = 'HAZARDOUS';
-            else if (simulatedAQI > 200) badgeText = 'VERY UNHEALTHY';
-            else if (simulatedAQI > 150) badgeText = 'UNHEALTHY';
-            else if (simulatedAQI > 100) badgeText = 'SENSITIVE';
-            else if (simulatedAQI > 50) badgeText = 'MODERATE';
-            
-            badge.textContent = badgeText;
-        }
+        gaugeFill.style.strokeDashoffset = 440 - (Math.min(500, simulatedAQI) / 500) * 440;
+        gaugeFill.style.stroke = cat.color;
+        gaugeFill.style.filter = `drop-shadow(0 0 6px ${cat.color})`;
+    }
+    const badge = document.getElementById('simStatusBadge');
+    if (badge) {
+        badge.textContent = cat.level;
+        badge.style.borderColor = cat.color;
+        badge.style.color = cat.color;
+        badge.style.background = cat.color + '20';
     }
 
-    // Update Recommendations list based on simulated AQI
     const recList = document.getElementById('simRecList');
     if (recList) {
         recList.innerHTML = '';
-        const recs = [];
-        
-        if (simulatedAQI <= 50) {
-            recs.push("Air quality is ideal for all outdoor activities.");
-            recs.push("Highly recommended to open windows and ventilate rooms.");
-            recs.push("No health precautions needed.");
-        } else if (simulatedAQI <= 100) {
-            recs.push("Acceptable air quality; moderate outdoor activities are safe.");
-            recs.push("Sensitive groups (asthma, heart issues) should monitor symptoms.");
-            recs.push("Good day for regular ventilation.");
-        } else if (simulatedAQI <= 150) {
-            recs.push("Sensitive groups may experience health effects. Limit prolonged outdoor exposure.");
-            recs.push("Keep windows closed to prevent particulate entry.");
-            recs.push("Consider running indoor air purifiers.");
-        } else if (simulatedAQI <= 200) {
-            recs.push("Healthy individuals may start experiencing symptoms. Avoid outdoor sports/cardio.");
-            recs.push("Keep windows closed. Active air purification advised.");
-            recs.push("Wear a protective mask (N95/KN95) if going outdoors for long periods.");
-        } else {
-            recs.push("Severe pollution alert! Avoid all outdoor exposure.");
-            recs.push("Seal rooms. Run high-efficiency particulate air (HEPA) purifiers.");
-            recs.push("Compulsory mask usage for essential outdoor travel.");
-        }
-        
-        recs.forEach(rec => {
-            const li = document.createElement('li');
-            li.textContent = rec;
-            recList.appendChild(li);
-        });
+        const recs = simulatedAQI <= 50
+            ? ['Air quality is ideal for all outdoor activities.', 'Open windows for ventilation.', 'No health precautions needed.']
+            : simulatedAQI <= 100
+            ? ['Moderate air — sensitive groups monitor symptoms.', 'Regular outdoor activity OK for healthy adults.']
+            : simulatedAQI <= 150
+            ? ['Sensitive groups limit prolonged outdoor exposure.', 'Keep windows closed. Consider air purifiers.']
+            : simulatedAQI <= 200
+            ? ['Avoid outdoor sports. Wear N95 if outdoors.', 'Active air purification advised.']
+            : ['Severe alert — stay indoors. Seal rooms. HEPA purifiers required.'];
+        recs.forEach(rec => { const li = document.createElement('li'); li.textContent = rec; recList.appendChild(li); });
     }
 }

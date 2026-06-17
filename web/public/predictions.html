@@ -117,7 +117,6 @@
     /* Tabs for charts */
     .chart-tabs {
         display: flex;
-        flex-wrap: wrap;
         gap: 10px;
         margin-bottom: 20px;
         background: rgba(0, 0, 0, 0.2);
@@ -248,61 +247,7 @@
 
     @media (max-width: 900px) {
         .forecast-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-    }
-
-    @media (max-width: 768px) {
-        .prediction-header {
-            padding: 24px;
-        }
-
-        .prediction-header h1 {
-            font-size: 2rem;
-        }
-
-        .graph-header {
-            align-items: flex-start;
-        }
-
-        .chart-tabs {
-            width: 100%;
-        }
-
-        .chart-tab {
-            flex: 1 1 calc(50% - 8px);
-            min-width: 0;
-        }
-
-        .forecast-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .backend-prediction-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .prediction-form-footer {
-            flex-direction: column;
-            align-items: stretch;
-        }
-
-        .prediction-submit-btn {
-            width: 100%;
-        }
-
-        .sim-layout {
-            grid-template-columns: 1fr;
-            gap: 24px;
-        }
-
-        .sim-result {
-            padding: 18px;
-        }
-
-        .sim-gauge-wrapper {
-            width: 140px;
-            height: 140px;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
         }
     }
 
@@ -372,135 +317,270 @@
     .forecast-aqi.mod { background: rgba(255, 167, 38, 0.15); color: #ffa726; border: 1px solid #ffa726; }
     .forecast-aqi.unhealth { background: rgba(255, 71, 87, 0.15); color: #ff4757; border: 1px solid #ff4757; }
 
-    .backend-prediction-panel {
-        background: rgba(20, 35, 60, 0.72);
-        backdrop-filter: blur(12px);
-        border-radius: 28px;
-        border: 1px solid rgba(255, 255, 255, 0.12);
+    .forecast-date { font-size: 0.8rem; color: #a0b3d6; margin-bottom: 5px; }
+    .forecast-desc { font-size: 0.85rem; color: #80deea; margin-bottom: 12px; font-weight: 600; }
+
+    .forecast-rain { font-size: 0.78rem; color: #3498db; margin-bottom: 8px; }
+    .forecast-error {
+        grid-column: 1 / -1;
+        text-align: center;
         padding: 30px;
-        margin: 40px 0;
-        box-shadow: 0 25px 45px rgba(0, 0, 0, 0.35);
+        color: #ffa726;
+        background: rgba(255, 167, 38, 0.08);
+        border-radius: 16px;
+        border: 1px solid rgba(255, 167, 38, 0.3);
     }
 
-    .backend-prediction-panel h3 {
-        font-size: 1.6rem;
+    /* Source badge */
+    .source-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        border-radius: 50px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-top: 12px;
+    }
+    .source-badge.ml { background: rgba(46, 213, 115, 0.12); color: #2ed573; border: 1px solid #2ed573; }
+    .source-badge.fallback { background: rgba(255, 167, 38, 0.12); color: #ffa726; border: 1px solid #ffa726; }
+
+    /* Current AQI Panel — distinct from simulator */
+    .current-aqi-section {
+        margin-bottom: 30px;
+    }
+
+    .current-aqi-grid {
+        display: grid;
+        grid-template-columns: 280px 1fr 1fr;
+        gap: 24px;
+        align-items: stretch;
+    }
+
+    .current-aqi-card {
+        background: linear-gradient(145deg, rgba(15, 28, 55, 0.9), rgba(25, 20, 50, 0.85));
+        border-radius: 28px;
+        padding: 28px;
+        border: 2px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        transition: border-color 0.4s ease;
+    }
+
+    .current-aqi-gauge {
+        position: relative;
+        width: 200px;
+        height: 200px;
+        margin: 10px 0;
+    }
+
+    .current-aqi-gauge svg {
+        transform: rotate(-90deg);
+        width: 100%;
+        height: 100%;
+    }
+
+    .current-aqi-ring-bg {
+        fill: none;
+        stroke: rgba(255, 255, 255, 0.06);
+        stroke-width: 16;
+    }
+
+    .current-aqi-ring {
+        fill: none;
+        stroke-width: 16;
+        stroke-linecap: round;
+        stroke-dasharray: 502;
+        stroke-dashoffset: 502;
+        transition: stroke-dashoffset 0.8s ease, stroke 0.4s ease;
+    }
+
+    .current-aqi-center {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .current-aqi-value {
+        font-size: 3.5rem;
+        font-weight: 800;
+        color: #fff;
+        line-height: 1;
+    }
+
+    .current-aqi-unit {
+        font-size: 0.75rem;
+        color: #a0b3d6;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        margin-top: 4px;
+    }
+
+    .current-aqi-badge {
+        padding: 6px 18px;
+        border-radius: 50px;
+        font-weight: 700;
+        font-size: 0.85rem;
+        border: 2px solid;
+        margin-top: 12px;
+    }
+
+    .current-aqi-label {
+        color: #b0c2e6;
+        font-size: 0.95rem;
+        margin-top: 8px;
+    }
+
+    .aqi-metrics-card {
+        background: rgba(20, 35, 60, 0.55);
+        backdrop-filter: blur(10px);
+        border-radius: 24px;
+        padding: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .aqi-metrics-card h3 {
+        font-size: 1.1rem;
+        color: #fff;
         margin-bottom: 18px;
-        color: #ffffff;
         display: flex;
         align-items: center;
         gap: 10px;
     }
 
-    .backend-prediction-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(200px, 1fr));
-        gap: 20px;
-    }
+    .aqi-metrics-card h3 i { color: #80deea; }
 
-    .backend-prediction-grid label {
-        display: block;
-        font-size: 0.92rem;
-        color: #c0d0f0;
-        margin-bottom: 6px;
-    }
-
-    .backend-prediction-grid input {
-        width: 100%;
-        padding: 12px 14px;
-        border-radius: 14px;
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        background: rgba(255, 255, 255, 0.05);
-        color: #ffffff;
-        font-size: 1rem;
-        outline: none;
-        transition: border-color 0.2s ease;
-    }
-
-    .backend-prediction-grid input:focus {
-        border-color: #80deea;
-    }
-
-    .prediction-form-footer {
-        margin-top: 25px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 16px;
-        align-items: center;
-    }
-
-    .prediction-submit-btn {
-        background: #80deea;
-        border: none;
-        border-radius: 24px;
-        color: #0f1c3f;
-        padding: 12px 24px;
-        font-size: 1rem;
-        font-weight: 700;
-        cursor: pointer;
-        transition: transform 0.2s ease, opacity 0.2s ease;
-    }
-
-    .prediction-submit-btn:hover {
-        transform: translateY(-1px);
-    }
-
-    .prediction-submit-btn:disabled {
-        opacity: 0.65;
-        cursor: not-allowed;
-    }
-
-    .prediction-status {
-        flex: 1;
-        min-width: 220px;
-        color: #d1d9ec;
-        font-size: 0.95rem;
-    }
-
-    .prediction-status.loading {
-        color: #80deea;
-    }
-
-    .prediction-status.error {
-        color: #ff7675;
-    }
-
-    .prediction-results {
-        margin-top: 24px;
-    }
-
-    .prediction-result-card {
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid rgba(128, 222, 234, 0.16);
-        border-radius: 20px;
-        padding: 22px;
-        color: #f0f8ff;
-    }
-
-    .prediction-result-card h4 {
-        margin-bottom: 16px;
-        color: #ffffff;
-    }
-
-    .prediction-result-card .result-row {
+    .aqi-metric-row {
         display: flex;
         justify-content: space-between;
-        gap: 16px;
-        padding: 10px 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        align-items: center;
+        padding: 12px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
 
-    .prediction-result-card .result-row:last-child {
-        border-bottom: none;
+    .aqi-metric-row:last-child { border-bottom: none; }
+
+    .aqi-metric-label { color: #a0b3d6; font-size: 0.9rem; }
+    .aqi-metric-value { color: #fff; font-weight: 700; font-size: 1.15rem; }
+
+    .aqi-advice {
+        color: #b0c2e6;
+        font-size: 0.92rem;
+        line-height: 1.5;
+        margin-top: 12px;
+        padding: 12px;
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 12px;
     }
 
-    .prediction-result-card .result-row span {
-        color: #c0d0f0;
+    .aqi-trend {
+        margin-top: 14px;
+        font-size: 0.88rem;
+        color: #80deea;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
 
-    .prediction-result-card .result-note {
-        margin-top: 16px;
-        color: #a0b3d6;
-        font-size: 0.95rem;
+    /* AQI color scale legend */
+    .aqi-scale {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .aqi-scale-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 14px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid transparent;
+        transition: all 0.25s ease;
+        font-size: 0.85rem;
+    }
+
+    .aqi-scale-item.active {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.2);
+        transform: scale(1.02);
+    }
+
+    .aqi-scale-dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .aqi-scale-range { color: #fff; font-weight: 600; min-width: 52px; }
+    .aqi-scale-name { color: #a0b3d6; flex: 1; }
+
+    .chart-wrapper {
+        position: relative;
+        height: 320px;
+        width: 100%;
+    }
+
+    /* Responsive */
+    @media (max-width: 1100px) {
+        .current-aqi-grid {
+            grid-template-columns: 1fr 1fr;
+        }
+        .current-aqi-card {
+            grid-column: 1 / -1;
+            flex-direction: row;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .prediction-header {
+            padding: 24px 20px;
+            border-radius: 20px;
+        }
+        .prediction-header h1 { font-size: 1.6rem; }
+        .prediction-header p { font-size: 0.95rem; flex-wrap: wrap; }
+        .prediction-header::before { font-size: 80px; right: 10px; }
+
+        .current-aqi-grid { grid-template-columns: 1fr; }
+        .current-aqi-card { flex-direction: column; padding: 20px; }
+        .current-aqi-gauge { width: 160px; height: 160px; }
+        .current-aqi-value { font-size: 2.8rem; }
+
+        .chart-tabs { flex-wrap: wrap; }
+        .chart-tab { flex: 1 1 45%; font-size: 0.82rem; padding: 8px 10px; }
+
+        .forecast-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        .forecast-card { padding: 14px 10px; }
+        .forecast-icon { font-size: 1.6rem; margin: 8px 0; height: 36px; }
+
+        .simulator-container { padding: 20px 16px; border-radius: 20px; }
+        .sim-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+        .sim-header h3 { font-size: 1.2rem; }
+
+        .graph-container { overflow: hidden; }
+        .chart-wrapper { height: 260px; }
+
+        .insight-card { padding: 16px; }
+        .insight-info h4 { font-size: 1rem; }
+    }
+
+    @media (max-width: 480px) {
+        .forecast-grid { grid-template-columns: 1fr 1fr; }
+        .chart-tab { flex: 1 1 100%; }
+        .current-aqi-value { font-size: 2.4rem; }
     }
 
     /* Interactive What-If Simulator Styling */
@@ -585,7 +665,6 @@
 
     .sim-input {
         width: 100%;
-        appearance: none;
         -webkit-appearance: none;
         height: 8px;
         background: rgba(255, 255, 255, 0.1);
@@ -766,16 +845,100 @@
       <h1><i class="fas fa-chart-line"></i> Predictive Forecasting</h1>
       <p>
         <i class="fas fa-microchip"></i>
-        Advanced real-time simulation and predictive environmental analysis
+        LSTM-powered 24-hour forecasts &amp; 7-day environmental outlook
       </p>
+      <div id="forecastSourceBadge" class="source-badge fallback">
+        <i class="fas fa-spinner fa-spin"></i> Loading forecast engine...
+      </div>
     </div>
+
+    <!-- Live Current AQI Panel -->
+    <section class="current-aqi-section">
+      <h3 class="forecast-title">
+        <i class="fas fa-lungs"></i> Live Air Quality Index
+      </h3>
+      <div class="current-aqi-grid">
+        <div class="current-aqi-card" id="currentAqiCard">
+          <div class="current-aqi-gauge">
+            <svg viewBox="0 0 180 180">
+              <circle class="current-aqi-ring-bg" cx="90" cy="90" r="80"></circle>
+              <circle class="current-aqi-ring" id="currentAqiRing" cx="90" cy="90" r="80"></circle>
+            </svg>
+            <div class="current-aqi-center">
+              <div class="current-aqi-value" id="currentAqiValue">--</div>
+              <div class="current-aqi-unit">AQI</div>
+            </div>
+          </div>
+          <span class="current-aqi-badge" id="currentAqiBadge">--</span>
+          <div class="current-aqi-label" id="currentAqiLabel">Loading...</div>
+          <div class="aqi-trend" id="aqiTrendText"><i class="fas fa-spinner fa-spin"></i> Analyzing trend...</div>
+        </div>
+
+        <div class="aqi-metrics-card">
+          <h3><i class="fas fa-vial"></i> Pollutant Breakdown</h3>
+          <div class="aqi-metric-row">
+            <span class="aqi-metric-label">PM2.5 (fine particles)</span>
+            <span class="aqi-metric-value"><span id="currentPm25">--</span> µg/m³</span>
+          </div>
+          <div class="aqi-metric-row">
+            <span class="aqi-metric-label">PM10 (coarse dust)</span>
+            <span class="aqi-metric-value"><span id="currentPm10">--</span> µg/m³</span>
+          </div>
+          <div class="aqi-metric-row">
+            <span class="aqi-metric-label">Temperature</span>
+            <span class="aqi-metric-value" id="currentAqiTemp">-- °C</span>
+          </div>
+          <div class="aqi-metric-row">
+            <span class="aqi-metric-label">Humidity</span>
+            <span class="aqi-metric-value" id="currentAqiHum">-- %</span>
+          </div>
+          <p class="aqi-advice" id="currentAqiAdvice">Reading live sensor data from Firebase...</p>
+        </div>
+
+        <div class="aqi-metrics-card">
+          <h3><i class="fas fa-palette"></i> AQI Scale Reference</h3>
+          <div class="aqi-scale">
+            <div class="aqi-scale-item" data-min="0" data-max="50">
+              <span class="aqi-scale-dot" style="background:#00cc66"></span>
+              <span class="aqi-scale-range">0–50</span>
+              <span class="aqi-scale-name">Good — safe for everyone</span>
+            </div>
+            <div class="aqi-scale-item" data-min="51" data-max="100">
+              <span class="aqi-scale-dot" style="background:#ffcc00"></span>
+              <span class="aqi-scale-range">51–100</span>
+              <span class="aqi-scale-name">Moderate — sensitive groups take care</span>
+            </div>
+            <div class="aqi-scale-item" data-min="101" data-max="150">
+              <span class="aqi-scale-dot" style="background:#ff9933"></span>
+              <span class="aqi-scale-range">101–150</span>
+              <span class="aqi-scale-name">Unhealthy for sensitive groups</span>
+            </div>
+            <div class="aqi-scale-item" data-min="151" data-max="200">
+              <span class="aqi-scale-dot" style="background:#ff6666"></span>
+              <span class="aqi-scale-range">151–200</span>
+              <span class="aqi-scale-name">Unhealthy — limit outdoor time</span>
+            </div>
+            <div class="aqi-scale-item" data-min="201" data-max="300">
+              <span class="aqi-scale-dot" style="background:#cc3333"></span>
+              <span class="aqi-scale-range">201–300</span>
+              <span class="aqi-scale-name">Very unhealthy — stay indoors</span>
+            </div>
+            <div class="aqi-scale-item" data-min="301" data-max="500">
+              <span class="aqi-scale-dot" style="background:#990099"></span>
+              <span class="aqi-scale-range">301+</span>
+              <span class="aqi-scale-name">Hazardous — health emergency</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <!-- Main Forecasting Block -->
     <div class="predictions-grid">
       <!-- 24-Hour Forecast Charts -->
       <div class="graph-container">
         <div class="graph-header">
-          <h2><i class="fas fa-history"></i> 24-Hour Projections</h2>
+          <h2><i class="fas fa-history"></i> 24-Hour ML Projections</h2>
           <div class="graph-controls">
             <!-- Parameter Selection tabs -->
             <div class="chart-tabs">
@@ -795,19 +958,13 @@
           </div>
         </div>
 
-        <div class="chart-wrapper" style="position: relative;">
-          <div id="chartLoadingOverlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 28, 63, 0.8); display: flex; align-items: center; justify-content: center; z-index: 10; border-radius: 12px; display: none;">
-            <div style="text-align: center; color: #80deea;">
-              <i class="fas fa-circle-notch fa-spin fa-2x" style="margin-bottom: 10px;"></i>
-              <div>Fetching AI Predictions...</div>
-            </div>
-          </div>
+        <div class="chart-wrapper">
           <canvas id="predictionChart"></canvas>
         </div>
 
         <div class="graph-footer">
-          <i class="fas fa-info-circle"></i> 
-          Projections computed by LSTM Neural Network updated at <span id="lastUpdateTime">--:--</span>
+          <i class="fas fa-info-circle"></i>
+          24h LSTM (Moratuwa-trained) · 7-day Open-Meteo live · Updated <span id="lastUpdateTime">--:--</span>
         </div>
       </div>
 
@@ -848,16 +1005,6 @@
         <button class="sim-reset-btn" id="simResetBtn">
           <i class="fas fa-sync-alt"></i> Reset to Current
         </button>
-      </div>
-      <div style="margin-bottom: 25px; padding: 15px; background: rgba(128, 222, 234, 0.1); border-left: 4px solid #80deea; border-radius: 8px; display: flex; align-items: center; justify-content: space-between;">
-        <div>
-          <strong style="color: #fff; font-size: 1.1rem;">Live Current AQI:</strong>
-          <div style="font-size: 0.9rem; color: #a0b3d6;">Latest reading from sensors</div>
-        </div>
-        <div style="display: flex; align-items: center; gap: 15px;">
-          <span id="liveCurrentAQIValue" style="font-size: 2rem; font-weight: bold; color: #fff;">--</span>
-          <span id="liveCurrentAQIBadge" style="padding: 4px 12px; border-radius: 20px; font-weight: bold; background: rgba(255,255,255,0.1);">--</span>
-        </div>
       </div>
       <div class="sim-layout">
         <!-- Sliders -->
