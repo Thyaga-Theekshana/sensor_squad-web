@@ -1,0 +1,11 @@
+[build]
+  publish = "public"
+  functions = "netlify/functions"
+
+[dev]
+  publish = "public"
+  functions = "netlify/functions"
+
+# Optional: Add environment variables for local development
+[build.environment]
+  NODE_VERSION = "18"

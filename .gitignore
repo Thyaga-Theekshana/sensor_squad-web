@@ -1,0 +1,34 @@
+# Node dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-lock.yaml
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# PlatformIO / ESP32 build artifacts
+.pio/
+build/
+libdeps/
+*.elf
+*.bin
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Firebase debug logs
+firebase-debug.log

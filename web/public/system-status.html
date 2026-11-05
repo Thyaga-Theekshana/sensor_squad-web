@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>System Status - AQI Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    .status-page { position: relative; overflow: hidden; }
+    .status-page::before { content: ''; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: radial-gradient(circle at 50% 50%, rgba(77,166,255,0.05) 0%, transparent 60%); pointer-events: none; z-index: -1; }
+    .page-header { text-align: center; margin: 40px 0 30px; animation: fadeIn 1s ease-out; }
+    @keyframes fadeIn { 0% { opacity: 0; } 100% { opacity: 1; } }
+    .page-header h1 { font-size: 2.5rem; margin-bottom: 15px; background: linear-gradient(135deg, #ffffff, #4da6ff, #00ffcc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 25px; margin: 30px 0; }
+    .status-card { background: rgba(20,35,60,0.6); backdrop-filter: blur(10px); border-radius: 28px; padding: 30px; border: 1px solid rgba(255,255,255,0.1); position: relative; overflow: hidden; }
+    .status-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px; }
+    .status-header h3 { font-size: 1.5rem; display: flex; align-items: center; gap: 12px; }
+    .status-indicator { padding: 8px 16px; border-radius: 50px; font-weight: bold; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; }
+    .status-indicator.loading { background: rgba(255,255,255,0.1); color: #fff; }
+    .status-indicator.online { background: rgba(0,255,200,0.2); color: #00ffcc; border: 1px solid #00ffcc; }
+    .status-indicator.offline { background: rgba(255,71,87,0.2); color: #ff4757; border: 1px solid #ff4757; }
+    .status-details { display: grid; gap: 15px; }
+    .detail-row { display: flex; justify-content: space-between; padding: 12px 15px; background: rgba(0,0,0,0.2); border-radius: 12px; }
+    .detail-label { color: #a0b3d6; font-weight: 500; }
+    .detail-value { font-weight: bold; color: #fff; }
+    .detail-value.good { color: #00ffcc; }
+    .detail-value.bad { color: #ff4757; }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-brand"><i class="fas fa-server"></i><span>System Status</span></div>
+    <div class="nav-links">
+      <a href="index.html"><i class="fas fa-home"></i> Home</a>
+      <a href="weather-charts.html"><i class="fas fa-cloud-sun"></i> Weather</a>
+      <a href="pollution-charts.html"><i class="fas fa-smog"></i> Pollution</a>
+      <a href="predictions.html"><i class="fas fa-brain"></i> Predictions</a>
+    </div>
+    <div class="nav-info"><span id="currentTime"></span></div>
+  </nav>
+
+  <main class="dashboard status-page">
+    <header class="page-header">
+      <h1><i class="fas fa-heartbeat"></i> System Health Monitor</h1>
+      <p>Real-time status of backend services, models, and databases.</p>
+    </header>
+
+    <div class="status-grid">
+      <!-- API Status Card -->
+      <div class="status-card">
+        <div class="status-header">
+          <h3><i class="fas fa-microchip" style="color: #4da6ff;"></i> Prediction API</h3>
+          <div id="apiStatusBadge" class="status-indicator loading"><i class="fas fa-spinner fa-spin"></i> Checking...</div>
+        </div>
+        <div class="status-details">
+          <div class="detail-row"><span class="detail-label">Endpoint URL</span><span class="detail-value" id="apiUrlText">http://127.0.0.1:5001</span></div>
+          <div class="detail-row"><span class="detail-label">Service Status</span><span class="detail-value" id="apiServiceStatus">--</span></div>
+          <div class="detail-row"><span class="detail-label">Environment</span><span class="detail-value" id="apiEnv">--</span></div>
+          <div class="detail-row"><span class="detail-label">Latency</span><span class="detail-value" id="apiLatency">--</span></div>
+        </div>
+      </div>
+
+      <!-- Model Info Card -->
+      <div class="status-card">
+        <div class="status-header">
+          <h3><i class="fas fa-brain" style="color: #ff6b6b;"></i> ML Models</h3>
+          <div id="modelStatusBadge" class="status-indicator loading"><i class="fas fa-spinner fa-spin"></i> Checking...</div>
+        </div>
+        <div class="status-details">
+          <div class="detail-row"><span class="detail-label">Core Engine</span><span class="detail-value">TensorFlow (LSTM)</span></div>
+          <div class="detail-row"><span class="detail-label">Model State</span><span class="detail-value" id="modelState">--</span></div>
+          <div class="detail-row"><span class="detail-label">Sensors Expected</span><span class="detail-value" id="modelFeatures">--</span></div>
+          <div class="detail-row"><span class="detail-label">Fallback System</span><span class="detail-value good">Ready</span></div>
+        </div>
+      </div>
+
+      <!-- Firebase Database Card -->
+      <div class="status-card">
+        <div class="status-header">
+          <h3><i class="fas fa-database" style="color: #ffa726;"></i> Sensor Database (Firebase)</h3>
+          <div id="dbStatusBadge" class="status-indicator loading"><i class="fas fa-spinner fa-spin"></i> Connecting...</div>
+        </div>
+        <div class="status-details">
+          <div class="detail-row"><span class="detail-label">Connection</span><span class="detail-value" id="dbConnStatus">--</span></div>
+          <div class="detail-row"><span class="detail-label">Weather Data</span><span class="detail-value" id="dbWeatherData">--</span></div>
+          <div class="detail-row"><span class="detail-label">Pollution Data</span><span class="detail-value" id="dbPollutionData">--</span></div>
+          <div class="detail-row"><span class="detail-label">Last Sync</span><span class="detail-value" id="dbLastSync">--</span></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  
+  <script>
+    const API_BASE = window.PREDICTION_API_URL || 'http://127.0.0.1:8000';
+    
+    document.addEventListener('DOMContentLoaded', () => {
+        updateTime();
+        setInterval(updateTime, 1000);
+        checkApiStatus();
+        checkFirebaseStatus();
+    });
+
+    function updateTime() {
+        const now = new Date();
+        document.getElementById('currentTime').textContent = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    async function checkApiStatus() {
+        document.getElementById('apiUrlText').textContent = API_BASE;
+        const start = performance.now();
+        try {
+            const res = await fetch(`${API_BASE}/health`);
+            const latency = Math.round(performance.now() - start);
+            if (res.ok) {
+                const data = await res.json();
+                setIndicator('apiStatusBadge', 'online', 'Online');
+                document.getElementById('apiServiceStatus').textContent = data.status || 'running';
+                document.getElementById('apiServiceStatus').className = 'detail-value good';
+                document.getElementById('apiEnv').textContent = data.environment || 'production';
+                document.getElementById('apiLatency').textContent = `${latency}ms`;
+                document.getElementById('apiLatency').className = `detail-value ${latency < 500 ? 'good' : 'bad'}`;
+                
+                checkModelStatus();
+            } else {
+                throw new Error("Bad status");
+            }
+        } catch (err) {
+            setIndicator('apiStatusBadge', 'offline', 'Offline');
+            document.getElementById('apiServiceStatus').textContent = 'Unreachable';
+            document.getElementById('apiServiceStatus').className = 'detail-value bad';
+            document.getElementById('apiLatency').textContent = '--';
+            setIndicator('modelStatusBadge', 'offline', 'API Offline');
+            document.getElementById('modelState').textContent = 'Unknown';
+        }
+    }
+
+    async function checkModelStatus() {
+        try {
+            const res = await fetch(`${API_BASE}/model-info`);
+            if (res.ok) {
+                const data = await res.json();
+                setIndicator('modelStatusBadge', 'online', 'Loaded');
+                document.getElementById('modelState').textContent = data.status === 'success' ? 'Loaded & Ready' : 'Fallback Mode';
+                document.getElementById('modelState').className = data.status === 'success' ? 'detail-value good' : 'detail-value bad';
+                
+                if (data.expected_features) {
+                    document.getElementById('modelFeatures').textContent = `${data.expected_features.length} parameters`;
+                }
+            } else {
+                throw new Error("Bad status");
+            }
+        } catch (err) {
+            setIndicator('modelStatusBadge', 'offline', 'Error');
+            document.getElementById('modelState').textContent = 'Failed to load info';
+            document.getElementById('modelState').className = 'detail-value bad';
+        }
+    }
+
+    async function checkFirebaseStatus() {
+        let retries = 0;
+        const check = async () => {
+            if (window.firebaseHelpers?.firebaseInitialized) {
+                setIndicator('dbStatusBadge', 'online', 'Connected');
+                document.getElementById('dbConnStatus').textContent = 'Active';
+                document.getElementById('dbConnStatus').className = 'detail-value good';
+                
+                try {
+                    const weather = await window.firebaseHelpers.getLatestFromFirebase('weather_data', 1);
+                    const pollution = await window.firebaseHelpers.getLatestFromFirebase('pollution_data', 1);
+                    
+                    document.getElementById('dbWeatherData').textContent = weather.length > 0 ? 'Receiving' : 'Empty';
+                    document.getElementById('dbWeatherData').className = weather.length > 0 ? 'detail-value good' : 'detail-value bad';
+                    
+                    document.getElementById('dbPollutionData').textContent = pollution.length > 0 ? 'Receiving' : 'Empty';
+                    document.getElementById('dbPollutionData').className = pollution.length > 0 ? 'detail-value good' : 'detail-value bad';
+                    
+                    if (weather.length > 0) {
+                        const d = new Date(weather[0].timestamp);
+                        document.getElementById('dbLastSync').textContent = d.toLocaleTimeString();
+                    }
+                } catch(e) {
+                    // Ignore read errors
+                }
+            } else {
+                if (retries++ < 5) setTimeout(check, 1000);
+                else {
+                    setIndicator('dbStatusBadge', 'offline', 'Disconnected');
+                    document.getElementById('dbConnStatus').textContent = 'Failed';
+                    document.getElementById('dbConnStatus').className = 'detail-value bad';
+                }
+            }
+        };
+        check();
+    }
+
+    function setIndicator(id, status, text) {
+        const el = document.getElementById(id);
+        if(!el) return;
+        el.className = `status-indicator ${status}`;
+        let icon = status === 'online' ? 'fa-check-circle' : (status === 'offline' ? 'fa-times-circle' : 'fa-spinner fa-spin');
+        el.innerHTML = `<i class="fas ${icon}"></i> ${text}`;
+    }
+  </script>
+</body>
+</html>

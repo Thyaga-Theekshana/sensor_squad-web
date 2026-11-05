@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pollution Charts - AQI Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Chart.js in head -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+/* ===== POLLUTION PAGE SPECIFIC ENHANCEMENTS ===== */
+
+/* Animated background for the whole page */
+.charts-page {
+    position: relative;
+    overflow: hidden;
+}
+
+.charts-page::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: 
+        radial-gradient(circle at 30% 40%, rgba(255, 71, 87, 0.1) 0%, transparent 30%),
+        radial-gradient(circle at 70% 60%, rgba(77, 166, 255, 0.1) 0%, transparent 35%),
+        radial-gradient(circle at 20% 80%, rgba(255, 167, 38, 0.1) 0%, transparent 40%),
+        radial-gradient(circle at 80% 20%, rgba(76, 175, 80, 0.1) 0%, transparent 30%);
+    pointer-events: none;
+    z-index: -1;
+    animation: pollutionGradient 20s ease infinite;
+}
+
+@keyframes pollutionGradient {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 0.8; }
+}
+
+/* Pollution-themed header - Enhanced */
+.pollution-header {
+    background: linear-gradient(135deg, #1a2634, #2c3e50, #1a2f3f);
+    background-size: 300% 300%;
+    position: relative;
+    overflow: hidden;
+    border-radius: 32px;
+    padding: 40px;
+    margin-bottom: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 30px 50px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 71, 87, 0.2) inset;
+    animation: gradientMove 12s ease infinite;
+}
+
+@keyframes gradientMove {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+.pollution-header::before {
+    content: '🌍';
+    position: absolute;
+    right: 20px;
+    bottom: 10px;
+    font-size: 150px;
+    opacity: 0.1;
+    transform: rotate(10deg);
+    animation: rotateGlobe 20s linear infinite;
+}
+
+@keyframes rotateGlobe {
+    0% { transform: rotate(10deg) scale(1); }
+    50% { transform: rotate(370deg) scale(1.1); }
+    100% { transform: rotate(730deg) scale(1); }
+}
+
+.pollution-header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 15px;
+    background: linear-gradient(135deg, #ffffff, #ff6b6b, #4da6ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: titleGlow 3s ease-in-out infinite;
+}
+
+@keyframes titleGlow {
+    0%, 100% { text-shadow: 0 0 20px rgba(255, 71, 87, 0.3); }
+    50% { text-shadow: 0 0 40px rgba(77, 166, 255, 0.5); }
+}
+
+.pollution-header p {
+    font-size: 1.2rem;
+    color: #a0b3d6;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.pollution-header p i {
+    color: #ff6b6b;
+    animation: pulse 2s infinite;
+}
+
+/* Animated pollution particles */
+.pollution-particles {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.pollution-particle {
+    position: absolute;
+    background: rgba(255, 71, 87, 0.1);
+    border-radius: 50%;
+    filter: blur(3px);
+    animation: floatPollution 15s linear infinite;
+}
+
+@keyframes floatPollution {
+    0% {
+        transform: translateY(100vh) translateX(0) scale(0);
+        opacity: 0;
+    }
+    10% {
+        opacity: 0.5;
+    }
+    90% {
+        opacity: 0.5;
+    }
+    100% {
+        transform: translateY(-100vh) translateX(100px) scale(2);
+        opacity: 0;
+    }
+}
+
+.pollution-smoke {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at 30% 80%, rgba(100, 100, 100, 0.1), transparent 50%);
+    animation: smokeRise 20s ease-in-out infinite;
+}
+
+@keyframes smokeRise {
+    0%, 100% { transform: translateY(0) scale(1); opacity: 0.1; }
+    50% { transform: translateY(-20px) scale(1.1); opacity: 0.2; }
+}
+
+/* AQI Gauge Container - Enhanced */
+.aqi-gauge-container {
+    background: rgba(20, 30, 45, 0.6);
+    backdrop-filter: blur(10px);
+    border-radius: 32px;
+    padding: 35px;
+    margin: 30px 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 40px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    position: relative;
+    overflow: hidden;
+    animation: fadeInUp 1s ease-out;
+}
+
+@keyframes fadeInUp {
+    0% { opacity: 0; transform: translateY(30px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+.aqi-gauge-container::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at center, rgba(77, 166, 255, 0.1), transparent 70%);
+    animation: rotateSlow 30s linear infinite;
+    pointer-events: none;
+}
+
+@keyframes rotateSlow {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Gauge Enhancement */
+.gauge {
+    width: 240px;
+    height: 240px;
+    position: relative;
+    filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.3));
+    animation: gaugePulse 3s ease-in-out infinite;
+}
+
+@keyframes gaugePulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+}
+
+.gauge svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+    filter: drop-shadow(0 0 15px rgba(77, 166, 255, 0.3));
+}
+
+.gauge circle {
+    fill: none;
+    stroke-width: 20;
+    stroke-linecap: round;
+    transition: stroke 0.5s ease;
+}
+
+.gauge-bg {
+    stroke: rgba(255, 255, 255, 0.1);
+}
+
+.gauge-fill {
+    stroke: #4da6ff;
+    stroke-dasharray: 565.48;
+    stroke-dashoffset: 282.74;
+    transition: stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1);
+    filter: drop-shadow(0 0 10px currentColor);
+}
+
+.gauge-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(5px);
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    animation: glowPulse 2s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+    0%, 100% { box-shadow: 0 0 20px rgba(77, 166, 255, 0.3); }
+    50% { box-shadow: 0 0 40px rgba(77, 166, 255, 0.6); }
+}
+
+.gauge-text .value {
+    font-size: 3.2rem;
+    font-weight: bold;
+    line-height: 1;
+    background: linear-gradient(135deg, #ffffff, #e0e0ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.gauge-text .label {
+    font-size: 1rem;
+    color: #a0b3d6;
+    margin-top: 5px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* AQI Scale Enhancement */
+.aqi-scale {
+    flex: 1;
+    min-width: 280px;
+}
+
+.aqi-scale h4 {
+    font-size: 1.3rem;
+    margin-bottom: 20px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.aqi-scale h4 i {
+    color: #4da6ff;
+    animation: spin 10s linear infinite;
+}
+
+.scale-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin: 12px 0;
+    padding: 12px 15px;
+    border-radius: 50px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid transparent;
+}
+
+.scale-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateX(10px);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.scale-item.active {
+    background: rgba(77, 166, 255, 0.15);
+    border-left: 4px solid #4da6ff;
+    box-shadow: 0 5px 15px rgba(77, 166, 255, 0.2);
+}
+
+.scale-color {
+    width: 24px;
+    height: 24px;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 15px currentColor;
+}
+
+.scale-item:hover .scale-color {
+    transform: scale(1.2);
+}
+
+.scale-color.good { 
+    background: #00cc66;
+    box-shadow: 0 0 20px #00cc66;
+}
+.scale-color.moderate { 
+    background: #ffcc00;
+    box-shadow: 0 0 20px #ffcc00;
+}
+.scale-color.sensitive { 
+    background: #ff9933;
+    box-shadow: 0 0 20px #ff9933;
+}
+.scale-color.unhealthy { 
+    background: #ff6666;
+    box-shadow: 0 0 20px #ff6666;
+}
+.scale-color.very-unhealthy { 
+    background: #ff3333;
+    box-shadow: 0 0 20px #ff3333;
+}
+.scale-color.hazardous { 
+    background: #990000;
+    box-shadow: 0 0 20px #990000;
+}
+
+.scale-range {
+    font-weight: bold;
+    min-width: 70px;
+    font-size: 1.1rem;
+}
+
+.scale-desc {
+    color: #a0b3d6;
+    font-size: 1rem;
+    flex: 1;
+}
+
+/* Pollutant Comparison Enhancement */
+.comparison-section {
+    margin: 40px 0;
+    animation: fadeInUp 1s ease-out 0.2s both;
+}
+
+.comparison-section h3 {
+    font-size: 1.8rem;
+    margin-bottom: 25px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #fff;
+}
+
+.comparison-section h3 i {
+    color: #4da6ff;
+    animation: bounce 2s ease infinite;
+}
+
+.comparison-bars {
+    background: rgba(20, 30, 45, 0.4);
+    backdrop-filter: blur(5px);
+    border-radius: 28px;
+    padding: 25px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.comp-bar {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin: 15px 0;
+    padding: 5px 0;
+    transition: all 0.3s ease;
+}
+
+.comp-bar:hover {
+    transform: translateX(10px);
+}
+
+.comp-bar .label {
+    width: 90px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+.comp-bar .bar-container {
+    flex: 1;
+    height: 12px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.comp-bar .bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #4da6ff, #00ffcc, #4da6ff);
+    background-size: 200% 100%;
+    border-radius: 20px;
+    transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: barShimmer 2s linear infinite;
+    position: relative;
+}
+
+@keyframes barShimmer {
+    0% { background-position: 0% 0%; }
+    100% { background-position: 200% 0%; }
+}
+
+.comp-bar .value {
+    width: 70px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #4da6ff;
+    text-align: right;
+}
+
+/* Health Recommendations Enhancement */
+.health-tips {
+    background: linear-gradient(135deg, rgba(30, 40, 55, 0.7), rgba(20, 30, 45, 0.8));
+    backdrop-filter: blur(10px);
+    border-radius: 32px;
+    padding: 35px;
+    margin: 40px 0;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    animation: fadeInUp 1s ease-out 0.4s both;
+}
+
+.health-tips h3 {
+    font-size: 1.8rem;
+    margin-bottom: 25px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #fff;
+}
+
+.health-tips h3 i {
+    color: #ff6b6b;
+    animation: heartbeat 1.5s ease infinite;
+}
+
+@keyframes heartbeat {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+}
+
+.tip-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 25px;
+}
+
+.tip-card {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(5px);
+    border-radius: 24px;
+    padding: 25px;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    position: relative;
+    overflow: hidden;
+}
+
+.tip-card::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at center, rgba(77, 166, 255, 0.1), transparent 70%);
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    pointer-events: none;
+}
+
+.tip-card:hover {
+    transform: translateY(-10px) scale(1.02);
+    border-color: #4da6ff;
+    box-shadow: 0 20px 30px rgba(77, 166, 255, 0.2);
+}
+
+.tip-card:hover::before {
+    opacity: 1;
+    animation: rotate 15s linear infinite;
+}
+
+.tip-card i {
+    font-size: 40px;
+    margin-bottom: 20px;
+    color: #4da6ff;
+    animation: bounce 2s ease infinite;
+    display: inline-block;
+}
+
+.tip-card:nth-child(2) i { animation-delay: 0.3s; }
+.tip-card:nth-child(3) i { animation-delay: 0.6s; }
+
+.tip-card h4 {
+    font-size: 1.3rem;
+    margin-bottom: 12px;
+    color: #fff;
+}
+
+.tip-card p {
+    color: #a0b3d6;
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+/* Page Header Enhancement */
+.page-header {
+    text-align: center;
+    margin: 50px 0 30px;
+    animation: fadeIn 1s ease-out;
+}
+
+@keyframes fadeIn {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+}
+
+.page-header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 15px;
+    background: linear-gradient(135deg, #ffffff, #ff6b6b, #4da6ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.page-header h1 i {
+    animation: spin 10s linear infinite;
+    display: inline-block;
+}
+
+/* Chart Cards Enhancement */
+.individual-charts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 25px;
+    margin: 30px 0;
+    animation: fadeInUp 1s ease-out 0.6s both;
+}
+
+.chart-card {
+    background: rgba(20, 30, 45, 0.6);
+    backdrop-filter: blur(10px);
+    border-radius: 28px;
+    padding: 25px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.chart-card::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at center, rgba(77, 166, 255, 0.1), transparent 70%);
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    pointer-events: none;
+}
+
+.chart-card:hover {
+    transform: translateY(-10px) scale(1.02);
+    box-shadow: 0 30px 40px rgba(0, 0, 0, 0.4);
+}
+
+.chart-card:hover::before {
+    opacity: 1;
+    animation: rotate 15s linear infinite;
+}
+
+.chart-card[data-pollutant="aqi"] { border-top: 4px solid #4da6ff; }
+.chart-card[data-pollutant="pm25"] { border-top: 4px solid #ff6b6b; }
+.chart-card[data-pollutant="pm10"] { border-top: 4px solid #ffa726; }
+.chart-card[data-pollutant="voc"] { border-top: 4px solid #f39c12; }
+.chart-card[data-pollutant="nox"] { border-top: 4px solid #e74c3c; }
+.chart-card[data-pollutant="co"] { border-top: 4px solid #8e44ad; }
+.chart-card[data-pollutant="so2"] { border-top: 4px solid #e67e22; }
+.chart-card[data-pollutant="no2"] { border-top: 4px solid #3498db; }
+.chart-card[data-pollutant="o3"] { border-top: 4px solid #2ecc71; }
+.chart-card[data-pollutant="co2"] {border-top: 4px solid #16a085;}
+.chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.chart-header h3 {
+    font-size: 1.3rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.chart-header h3 i {
+    transition: all 0.3s ease;
+}
+
+.chart-card:hover .chart-header h3 i {
+    transform: scale(1.2) rotate(360deg);
+}
+
+/* Current Value Enhancement */
+.current-value {
+    position: relative;
+    display: inline-block;
+    padding: 8px 20px;
+    background: rgba(77, 166, 255, 0.15);
+    backdrop-filter: blur(5px);
+    border-radius: 30px;
+    font-weight: bold;
+    font-size: 1.2rem;
+    border: 1px solid rgba(77, 166, 255, 0.3);
+    transition: all 0.3s ease;
+}
+
+.current-value.updated {
+    animation: valueFlash 0.5s ease;
+}
+
+@keyframes valueFlash {
+    0%, 100% { background: rgba(77, 166, 255, 0.15); transform: scale(1); }
+    50% { background: rgba(77, 166, 255, 0.5); transform: scale(1.1); box-shadow: 0 0 30px #4da6ff; }
+}
+
+/* Back to Home Button Enhancement */
+.back-to-home {
+    text-align: center;
+    margin-top: 50px;
+    animation: fadeIn 1s ease-out 0.8s both;
+}
+
+.home-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(135deg, #4da6ff, #ff6b6b, #4da6ff);
+    background-size: 300% 100%;
+    color: white;
+    text-decoration: none;
+    padding: 16px 40px;
+    border-radius: 50px;
+    font-weight: bold;
+    font-size: 1.2rem;
+    transition: all 0.3s ease;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+    animation: gradientShift 5s ease infinite;
+}
+
+@keyframes gradientShift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+.home-btn:hover {
+    transform: translateY(-5px) scale(1.05);
+    box-shadow: 0 20px 30px rgba(255, 71, 87, 0.4);
+}
+
+.home-btn i {
+    transition: transform 0.3s ease;
+}
+
+.home-btn:hover i {
+    transform: translateX(-5px);
+}
+
+/* Time Select Enhancement */
+.time-select {
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 30px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.time-select:hover {
+    background: rgba(77, 166, 255, 0.2);
+    border-color: #4da6ff;
+    transform: translateY(-2px);
+}
+
+.time-select option {
+    background: #1a2634;
+    color: #fff;
+}
+
+/* Responsive Enhancements */
+@media (max-width: 768px) {
+    .pollution-header h1 {
+        font-size: 2rem;
+    }
+    
+    .gauge {
+        width: 200px;
+        height: 200px;
+        margin: 0 auto;
+    }
+    
+    .gauge-text {
+        width: 130px;
+        height: 130px;
+    }
+    
+    .gauge-text .value {
+        font-size: 2.5rem;
+    }
+    
+    .scale-item {
+        padding: 10px;
+    }
+    
+    .scale-range {
+        min-width: 60px;
+        font-size: 1rem;
+    }
+    
+    .page-header h1 {
+        font-size: 2rem;
+    }
+    
+    .individual-charts {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Animation Utilities */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+</style>
+</head>
+
+<body>
+  <!-- Pollution Particles -->
+  <div class="pollution-particles" id="pollutionParticles"></div>
+
+  <nav class="navbar">
+    <div class="nav-brand">
+      <i class="fas fa-wind"></i>
+      <span>Pollution Charts</span>
+    </div>
+    
+    <div class="nav-links">
+      <a href="index.html"><i class="fas fa-home"></i> Home</a>
+      <a href="weather-charts.html"><i class="fas fa-cloud-sun"></i> Weather Charts</a>
+      <a href="pollution-charts.html" class="active"><i class="fas fa-smog"></i> Pollution Charts</a>
+      <a href="predictions.html"><i class="fas fa-brain"></i> Predictions</a>
+    </div>
+    
+    <div class="nav-info">
+      <span id="currentTime"></span>
+      <span id="pollutionDataMode" class="demo-label" hidden>DEMO</span>
+    </div>
+  </nav>
+
+  <main class="charts-page">
+    <!-- Pollution Header with Animations -->
+    <div class="pollution-header">
+      <!-- Animated Smoke Effect -->
+      <div class="pollution-smoke"></div>
+      
+      <h1><i class="fas fa-industry"></i> Air Quality & Pollution</h1>
+      <p>
+        <i class="fas fa-biohazard"></i>
+        Real-time air quality monitoring with health recommendations
+      </p>
+    </div>
+
+    <!-- AQI Gauge Section -->
+    <div class="aqi-gauge-container">
+      <div class="gauge">
+        <svg viewBox="0 0 200 200">
+          <circle class="gauge-bg" cx="100" cy="100" r="90"></circle>
+          <circle class="gauge-fill" cx="100" cy="100" r="90" id="gaugeFill"></circle>
+        </svg>
+        <div class="gauge-text">
+          <div class="value" id="gaugeAQI">--</div>
+          <div class="label" id="gaugeStatus">Loading</div>
+        </div>
+      </div>
+      
+      <div class="aqi-scale">
+        <h4>
+          <i class="fas fa-chart-line"></i>
+          Air Quality Index Scale
+        </h4>
+        <div class="scale-item" data-aqi-range="0-50">
+          <span class="scale-color good"></span>
+          <span class="scale-range">0-50</span>
+          <span class="scale-desc">Good</span>
+        </div>
+        <div class="scale-item" data-aqi-range="51-100">
+          <span class="scale-color moderate"></span>
+          <span class="scale-range">51-100</span>
+          <span class="scale-desc">Moderate</span>
+        </div>
+        <div class="scale-item" data-aqi-range="101-150">
+          <span class="scale-color sensitive"></span>
+          <span class="scale-range">101-150</span>
+          <span class="scale-desc">Unhealthy for Sensitive</span>
+        </div>
+        <div class="scale-item" data-aqi-range="151-200">
+          <span class="scale-color unhealthy"></span>
+          <span class="scale-range">151-200</span>
+          <span class="scale-desc">Unhealthy</span>
+        </div>
+        <div class="scale-item" data-aqi-range="201-300">
+          <span class="scale-color very-unhealthy"></span>
+          <span class="scale-range">201-300</span>
+          <span class="scale-desc">Very Unhealthy</span>
+        </div>
+        <div class="scale-item" data-aqi-range="301-500">
+          <span class="scale-color hazardous"></span>
+          <span class="scale-range">301-500</span>
+          <span class="scale-desc">Hazardous</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pollutant Comparison -->
+    <div class="comparison-section">
+      <h3>
+        <i class="fas fa-chart-bar"></i>
+        Pollutant Levels Comparison
+      </h3>
+      <div class="comparison-bars" id="comparisonBars">
+        <!-- Generated by JavaScript -->
+      </div>
+    </div>
+
+    <!-- Health Recommendations -->
+    <div class="health-tips">
+      <h3>
+        <i class="fas fa-heartbeat"></i>
+        Health Recommendations
+      </h3>
+      <div class="tip-cards" id="healthTips">
+        <!-- Generated by JavaScript -->
+      </div>
+    </div>
+
+    <header class="page-header">
+      <h1><i class="fas fa-industry"></i> Individual Pollution Charts</h1>
+      <p>Select time range for all charts: 
+        <select id="globalTimeRange" class="time-select">
+          <option value="10">Last 10 readings</option>
+          <option value="20" selected>Last 20 readings</option>
+          <option value="50">Last 50 readings</option>
+        </select>
+      </p>
+    </header>
+
+    <div class="individual-charts">
+      <div class="chart-card" data-pollutant="aqi">
+        <div class="chart-header">
+          <h3><i class="fas fa-lungs"></i> Air Quality Index</h3>
+          <span class="current-value" id="aqiCurrent">--</span>
+        </div>
+        <div class="chart-wrapper-sm">
+          <canvas id="aqiChartCanvas"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card" data-pollutant="pm25">
+        <div class="chart-header">
+          <h3><i class="fas fa-cloud"></i> PM2.5</h3>
+          <span class="current-value" id="pm25Current">-- µg/m³</span>
+        </div>
+        <div class="chart-wrapper-sm">
+          <canvas id="pm25ChartCanvas"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card" data-pollutant="pm10">
+        <div class="chart-header">
+          <h3><i class="fas fa-cloud"></i> PM10</h3>
+          <span class="current-value" id="pm10Current">-- µg/m³</span>
+        </div>
+        <div class="chart-wrapper-sm">
+          <canvas id="pm10ChartCanvas"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card" data-pollutant="voc">
+        <div class="chart-header">
+          <h3><i class="fas fa-flask"></i> VOC Index</h3>
+          <span class="current-value" id="vocCurrent">-- ppb</span>
+        </div>
+        <div class="chart-wrapper-sm">
+          <canvas id="vocChartCanvas"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card" data-pollutant="nox">
+        <div class="chart-header">
+          <h3><i class="fas fa-industry"></i> NOx Index</h3>
+          <span class="current-value" id="noxCurrent">-- ppb</span>
+        </div>
+        <div class="chart-wrapper-sm">
+          <canvas id="noxChartCanvas"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card" data-pollutant="co">
+        <div class="chart-header">
+          <h3><i class="fas fa-industry"></i> Carbon Monoxide</h3>
+          <span class="current-value" id="coCurrent">-- ppb</span>
+        </div>
+        <div class="chart-wrapper-sm">
+          <canvas id="coChartCanvas"></canvas>
+        </div>
+      </div>
+
+     <!-- <div class="chart-card" data-pollutant="so2">
+        <div class="chart-header">
+          <h3><i class="fas fa-fire"></i> Sulfur Dioxide</h3>
+          <span class="current-value" id="so2Current">-- ppb</span>
+        </div>
+        <div class="chart-wrapper-sm">
+          <canvas id="so2ChartCanvas"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card" data-pollutant="no2">
+        <div class="chart-header">
+          <h3><i class="fas fa-car"></i> Nitrogen Dioxide</h3>
+          <span class="current-value" id="no2Current">-- ppb</span>
+        </div>
+        <div class="chart-wrapper-sm">
+          <canvas id="no2ChartCanvas"></canvas>
+        </div>
+      </div>-->
+
+      <!--<div class="chart-card" data-pollutant="o3">
+        <div class="chart-header">
+          <h3><i class="fas fa-sun"></i> Ozone</h3>
+          <span class="current-value" id="o3Current">-- ppb</span>
+        </div>
+        <div class="chart-wrapper-sm">
+          <canvas id="o3ChartCanvas"></canvas>
+        </div>-->
+
+         <div class="chart-card" data-pollutant="co2">
+        <div class="chart-header">
+           <h3><i class="fas fa-cloud"></i> CO₂</h3>
+           <span class="current-value" id="co2Current">-- ppm</span>
+        </div>
+        <div class="chart-wrapper-sm">
+            <canvas id="co2ChartCanvas"></canvas>
+        </div>
+    </div>
+      </div>
+    </div>
+
+   
+
+    <div class="back-to-home">
+      <a href="index.html" class="home-btn"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+    </div>
+  </main>
+
+  <!-- JavaScript -->
+  <script src="multi-channel-config.js"></script>
+  <script src="pollution-charts.js"></script>
+  <script>
+    // Create floating pollution particles
+    function createPollutionParticles() {
+        const particlesContainer = document.getElementById('pollutionParticles');
+        if (!particlesContainer) return;
+        
+        for (let i = 0; i < 40; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'pollution-particle';
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.width = Math.random() * 8 + 3 + 'px';
+            particle.style.height = particle.style.width;
+            particle.style.animationDelay = Math.random() * 15 + 's';
+            particle.style.animationDuration = Math.random() * 10 + 20 + 's';
+            particle.style.background = `rgba(${Math.random() * 100 + 100}, ${Math.random() * 50}, ${Math.random() * 50}, 0.1)`;
+            particlesContainer.appendChild(particle);
+        }
+    }
+
+    // Update AQI Gauge with animation
+    function updateAQIGauge(aqi) {
+        const gaugeFill = document.getElementById('gaugeFill');
+        const gaugeAQI = document.getElementById('gaugeAQI');
+        const gaugeStatus = document.getElementById('gaugeStatus');
+        
+        if (!gaugeFill || !gaugeAQI) return;
+        
+        // Calculate dash offset
+        const circumference = 2 * Math.PI * 90;
+        const maxAQI = 500;
+        const percentage = Math.min(aqi / maxAQI, 1);
+        const dashOffset = circumference * (1 - percentage);
+        
+        gaugeFill.style.strokeDashoffset = dashOffset;
+        gaugeAQI.textContent = Math.round(aqi);
+        
+        // Add flash animation
+        gaugeAQI.classList.add('updated');
+        setTimeout(() => gaugeAQI.classList.remove('updated'), 500);
+        
+        // Update color and status
+        let color, status;
+        if (aqi <= 50) {
+            color = '#00cc66';
+            status = 'Good';
+        } else if (aqi <= 100) {
+            color = '#ffcc00';
+            status = 'Moderate';
+        } else if (aqi <= 150) {
+            color = '#ff9933';
+            status = 'Unhealthy for Sensitive';
+        } else if (aqi <= 200) {
+            color = '#ff6666';
+            status = 'Unhealthy';
+        } else if (aqi <= 300) {
+            color = '#ff3333';
+            status = 'Very Unhealthy';
+        } else {
+            color = '#990000';
+            status = 'Hazardous';
+        }
+        
+        gaugeFill.style.stroke = color;
+        gaugeStatus.textContent = status;
+        
+        // Highlight active scale item
+        document.querySelectorAll('.scale-item').forEach(item => {
+            item.classList.remove('active');
+            const range = item.dataset.aqiRange;
+            if (range) {
+                const [min, max] = range.split('-').map(Number);
+                if (aqi >= min && aqi <= max) {
+                    item.classList.add('active');
+                }
+            }
+        });
+    }
+
+    // Update comparison bars with animation
+    function updateComparisonBars(pollutants) {
+        const container = document.getElementById('comparisonBars');
+        if (!container) return;
+        
+        const maxValues = {
+            'pm25': 100,
+            'pm10': 150,
+            'voc': 500,
+            'nox': 100,
+            'co': 1000,
+            'so2': 100,
+            'no2': 100,
+            'o3': 100,
+            'co2': 2000
+        };
+        
+        const displayNames = {
+            'pm25': 'PM2.5',
+            'pm10': 'PM10',
+            'voc': 'VOC',
+            'nox': 'NOx',
+            'co': 'CO',
+            'so2': 'SO₂',
+            'no2': 'NO₂',
+            'o3': 'O₃',
+            'co2': 'CO₂'
+        };
+        
+        let html = '';
+        for (const [key, value] of Object.entries(pollutants)) {
+            if (value !== undefined && !isNaN(value)){
+                const percentage = Math.min((value / maxValues[key]) * 100, 100);
+                html += `
+                    <div class="comp-bar">
+                        <span class="label">${displayNames[key] || key}</span>
+                        <div class="bar-container">
+                            <div class="bar" style="width: ${percentage}%"></div>
+                        </div>
+                        <span class="value">${value.toFixed(1)}</span>
+                    </div>
+                `;
+            }
+        }
+        container.innerHTML = html;
+    }
+
+    // Update health tips with animation
+    function updateHealthTips(aqi) {
+        const container = document.getElementById('healthTips');
+        if (!container) return;
+        
+        let tips = [];
+        if (aqi <= 50) {
+            tips = [
+                { icon: 'fa-walking', title: 'Perfect for outdoor activities', desc: 'Air quality is good. Enjoy your outdoor activities!' },
+                { icon: 'fa-wind', title: 'Ventilate your home', desc: 'Great time to open windows for fresh air.' },
+                { icon: 'fa-leaf', title: 'Ideal for plants', desc: 'Your indoor plants will thrive in this air quality.' }
+            ];
+        } else if (aqi <= 100) {
+            tips = [
+                { icon: 'fa-mask', title: 'Sensitive groups', desc: 'Consider reducing prolonged outdoor exertion if sensitive.' },
+                { icon: 'fa-home', title: 'Keep windows closed', desc: 'Limit outdoor air intake during peak hours.' },
+                { icon: 'fa-water', title: 'Stay hydrated', desc: 'Drink plenty of water to help your body.' }
+            ];
+        } else if (aqi <= 150) {
+            tips = [
+                { icon: 'fa-head-side-mask', title: 'Wear mask outdoors', desc: 'Consider wearing N95 mask when outside.' },
+                { icon: 'fa-hand-holding-heart', title: 'Limit exertion', desc: 'Reduce prolonged or heavy exertion.' },
+                { icon: 'fa-lungs', title: 'Take breaks', desc: 'Take more breaks during outdoor activities.' }
+            ];
+        } else {
+            tips = [
+                { icon: 'fa-home', title: 'Stay indoors', desc: 'Avoid outdoor activities if possible.' },
+                { icon: 'fa-head-side-mask', title: 'Use air purifier', desc: 'Run air purifiers to maintain indoor air quality.' },
+                { icon: 'fa-heartbeat', title: 'Monitor symptoms', desc: 'Watch for coughing or shortness of breath.' }
+            ];
+        }
+        
+        let html = '';
+        tips.forEach(tip => {
+            html += `
+                <div class="tip-card">
+                    <i class="fas ${tip.icon}"></i>
+                    <h4>${tip.title}</h4>
+                    <p>${tip.desc}</p>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+    }
+
+    // Update current time
+    function updateTime() {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('en-US', { 
+            hour12: true, 
+            hour: '2-digit', 
+            minute: '2-digit',
+            second: '2-digit'
+        });
+        const timeElement = document.getElementById('currentTime');
+        if (timeElement) {
+            timeElement.textContent = timeStr;
+        }
+    }
+
+    // Override the updateChart function
+    const originalUpdateChart = window.updateChart;
+    window.updateChart = function(chartId, chartName, unit, color, labels, values, currentValue) {
+        if (originalUpdateChart) {
+            originalUpdateChart(chartId, chartName, unit, color, labels, values, currentValue);
+        }
+        
+        if (chartId === 'aqi' && currentValue) {
+            updateAQIGauge(currentValue);
+            updateHealthTips(currentValue);
+            
+            // Get all pollutant values
+            const pollutants = {
+                pm25: parseFloat(document.getElementById('pm25Current')?.innerText) || 0,
+                pm10: parseFloat(document.getElementById('pm10Current')?.innerText) || 0,
+                voc: parseFloat(document.getElementById('vocCurrent')?.innerText) || 0,
+                nox: parseFloat(document.getElementById('noxCurrent')?.innerText) || 0,
+                co: parseFloat(document.getElementById('coCurrent')?.innerText) || 0,
+                so2: parseFloat(document.getElementById('so2Current')?.innerText) || 0,
+                no2: parseFloat(document.getElementById('no2Current')?.innerText) || 0,
+                o3: parseFloat(document.getElementById('o3Current')?.innerText) || 0,
+                co2: parseFloat(document.getElementById('co2Current')?.innerText.replace(/[^\d.]/g, '')) || 0
+            };
+            updateComparisonBars(pollutants);
+        }
+    };
+
+    // Initialize everything
+    document.addEventListener('DOMContentLoaded', function() {
+        createPollutionParticles();
+        updateTime();
+        setInterval(updateTime, 1000);
+    });
+  </script>
+    <!-- JavaScript -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="multi-channel-config.js"></script>
+  <script src="weather-charts.js"></script>
+
+</body>
+</html>

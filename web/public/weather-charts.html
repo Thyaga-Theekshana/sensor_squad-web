@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Weather Charts - AQI Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    /* All existing styles from your original weather-charts.html, except any slider-related */
+    .charts-page { position: relative; overflow: hidden; }
+    .charts-page::before { content: ''; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: radial-gradient(circle at 20% 30%, rgba(77,166,255,0.15) 0%, transparent 30%), radial-gradient(circle at 80% 70%, rgba(255,71,87,0.1) 0%, transparent 35%), radial-gradient(circle at 40% 80%, rgba(46,213,115,0.1) 0%, transparent 40%); pointer-events: none; z-index: -1; animation: gradientShift 15s ease infinite; }
+    @keyframes gradientShift { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
+    .weather-header { background: linear-gradient(135deg, #0a1f2f, #1a4a6f, #0f3b4f); background-size: 300% 300%; position: relative; overflow: hidden; border-radius: 32px; padding: 40px; margin-bottom: 30px; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 30px 50px rgba(0,0,0,0.6), 0 0 0 1px rgba(77,166,255,0.2) inset; animation: gradientMove 10s ease infinite; }
+    @keyframes gradientMove { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+    .weather-header::before { content: '⛅'; position: absolute; right: 20px; bottom: 10px; font-size: 150px; opacity: 0.1; transform: rotate(10deg); animation: floatEmoji 6s ease-in-out infinite; }
+    @keyframes floatEmoji { 0%,100% { transform: rotate(10deg) translateY(0); } 50% { transform: rotate(5deg) translateY(-20px); } }
+    .weather-animation { position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; pointer-events: none; z-index: 1; }
+    .weather-cloud { position: absolute; background: rgba(255,255,255,0.1); border-radius: 50px; filter: blur(20px); animation: floatCloud 40s linear infinite; }
+    .weather-cloud::before, .weather-cloud::after { content: ''; position: absolute; background: inherit; border-radius: 50%; }
+    .weather-cloud::before { width: 80px; height: 80px; top: -40px; left: 20px; }
+    .weather-cloud::after { width: 100px; height: 100px; top: -50px; left: 50px; }
+    @keyframes floatCloud { 0% { transform: translateX(-200px); } 100% { transform: translateX(calc(100vw + 200px)); } }
+    .weather-sun { position: absolute; top: -50px; right: -50px; width: 200px; height: 200px; background: radial-gradient(circle, rgba(255,200,50,0.3) 0%, transparent 70%); border-radius: 50%; animation: pulseSun 4s ease-in-out infinite; }
+    @keyframes pulseSun { 0%,100% { transform: scale(1); opacity: 0.3; } 50% { transform: scale(1.2); opacity: 0.5; } }
+    .weather-rain-drop { position: absolute; width: 2px; height: 25px; background: linear-gradient(transparent, rgba(255,255,255,0.6)); animation: rain 1.5s linear infinite; opacity: 0; }
+    @keyframes rain { 0% { transform: translateY(-100px); opacity: 0; } 20% { opacity: 0.6; } 80% { opacity: 0.6; } 100% { transform: translateY(400px); opacity: 0; } }
+    .weather-now { display: flex; align-items: center; gap: 40px; flex-wrap: wrap; margin: 20px 0; position: relative; z-index: 10; animation: slideInLeft 1s ease-out; }
+    @keyframes slideInLeft { 0% { opacity: 0; transform: translateX(-30px); } 100% { opacity: 1; transform: translateX(0); } }
+    .weather-icon-large { font-size: 100px; background: rgba(255,255,255,0.15); backdrop-filter: blur(10px); width: 160px; height: 160px; border-radius: 80px; display: flex; align-items: center; justify-content: center; animation: weatherFloat 3s ease-in-out infinite; border: 2px solid rgba(255,255,255,0.2); box-shadow: 0 20px 40px rgba(0,0,0,0.3); position: relative; overflow: hidden; }
+    .weather-icon-large::before { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle at center, rgba(255,255,255,0.3), transparent 70%); animation: rotate 10s linear infinite; }
+    @keyframes rotate { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    @keyframes weatherFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
+    .weather-summary { flex: 1; }
+    .weather-summary h2 { font-size: 2.5rem; margin-bottom: 10px; background: linear-gradient(135deg, #ffffff, #b3d9ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .weather-desc { color: #a0b3d6; font-size: 1.3rem; text-transform: capitalize; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+    .weather-metrics { display: flex; gap: 30px; flex-wrap: wrap; margin-top: 20px; }
+    .metric-item { background: rgba(255,255,255,0.05); backdrop-filter: blur(5px); padding: 12px 20px; border-radius: 50px; border: 1px solid rgba(255,255,255,0.1); transition: all 0.3s ease; }
+    .metric-item:hover { border-color: #4da6ff; transform: translateY(-3px); box-shadow: 0 10px 20px rgba(77,166,255,0.2); }
+    .metric-item .stat-label { color: #a0b3d6; font-size: 0.9rem; margin-right: 10px; }
+    .metric-item strong { font-size: 1.2rem; color: #fff; }
+    .weather-alerts { background: linear-gradient(135deg, #ff8a5c, #ff4757, #ff6b6b); background-size: 200% 200%; border-radius: 16px; padding: 18px 25px; margin: 20px 0; display: flex; align-items: center; gap: 15px; animation: alertPulse 2s infinite, gradientBG 3s ease infinite; border: 1px solid rgba(255,255,255,0.3); position: relative; overflow: hidden; }
+    @keyframes gradientBG { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+    @keyframes alertPulse { 0%,100% { opacity: 1; box-shadow: 0 0 20px rgba(255,71,87,0.5); } 50% { opacity: 0.95; box-shadow: 0 0 40px rgba(255,71,87,0.8); } }
+    .alert-close { margin-left: auto; cursor: pointer; opacity: 0.7; transition: all 0.3s ease; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(255,255,255,0.2); }
+    .page-header { text-align: center; margin: 40px 0 30px; animation: fadeIn 1s ease-out; }
+    @keyframes fadeIn { 0% { opacity: 0; } 100% { opacity: 1; } }
+    .page-header h1 { font-size: 2.5rem; margin-bottom: 15px; background: linear-gradient(135deg, #ffffff, #4da6ff, #00ffcc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .individual-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 25px; margin: 30px 0; }
+    .chart-card { background: rgba(20,35,60,0.6); backdrop-filter: blur(10px); border-radius: 28px; padding: 25px; border: 1px solid rgba(255,255,255,0.1); transition: all 0.4s cubic-bezier(0.175,0.885,0.32,1.275); cursor: pointer; position: relative; overflow: hidden; }
+    .chart-card:hover { transform: translateY(-10px) scale(1.02); border-color: #4da6ff; box-shadow: 0 30px 40px rgba(0,0,0,0.4); }
+    .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .chart-header h3 { font-size: 1.3rem; display: flex; align-items: center; gap: 10px; }
+    .current-value { position: relative; display: inline-block; padding: 8px 20px; background: rgba(77,166,255,0.15); backdrop-filter: blur(5px); border-radius: 30px; font-weight: bold; font-size: 1.2rem; border: 1px solid rgba(77,166,255,0.3); transition: all 0.3s ease; }
+    .back-to-home { text-align: center; margin-top: 50px; }
+    .home-btn { display: inline-flex; align-items: center; gap: 12px; background: linear-gradient(135deg, #4da6ff, #00ffcc); background-size: 200% 200%; color: white; text-decoration: none; padding: 15px 35px; border-radius: 50px; font-weight: bold; font-size: 1.2rem; transition: all 0.3s ease; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 10px 20px rgba(77,166,255,0.3); animation: gradientBG 3s ease infinite; }
+    .home-btn:hover { transform: translateY(-5px) scale(1.05); box-shadow: 0 20px 30px rgba(77,166,255,0.5); }
+    .weather-particles { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }
+    .weather-particle { position: absolute; background: rgba(77,166,255,0.1); border-radius: 50%; animation: floatParticle 20s infinite; }
+    @keyframes floatParticle { 0% { transform: translateY(100vh) scale(0); opacity: 0; } 10% { opacity: 0.3; } 90% { opacity: 0.3; } 100% { transform: translateY(-100vh) scale(1); opacity: 0; } }
+    @media (max-width: 768px) { .weather-icon-large { width: 120px; height: 120px; font-size: 60px; } .weather-summary h2 { font-size: 2rem; } .page-header h1 { font-size: 2rem; } .individual-charts { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="weather-particles" id="weatherParticles"></div>
+  <nav class="navbar">
+    <div class="nav-brand"><i class="fas fa-wind"></i><span>Weather Charts</span></div>
+    <div class="nav-links">
+      <a href="index.html"><i class="fas fa-home"></i> Home</a>
+      <a href="weather-charts.html" class="active"><i class="fas fa-cloud-sun"></i> Weather Charts</a>
+      <a href="pollution-charts.html"><i class="fas fa-smog"></i> Pollution Charts</a>
+      <a href="predictions.html"><i class="fas fa-brain"></i> Predictions</a>
+    </div>
+    <div class="nav-info"><span id="currentTime"></span><span id="weatherDataMode" class="demo-label" hidden>DEMO</span></div>
+  </nav>
+  <main class="charts-page">
+    <div class="weather-header">
+      <div class="weather-animation"><div class="weather-sun"></div></div>
+      <div class="weather-now">
+        <div class="weather-icon-large" id="mainWeatherIcon"><i class="fas fa-sun"></i></div>
+        <div class="weather-summary">
+          <h2>Current Weather</h2>
+          <!--<div class="weather-desc" id="weatherDescription"><i class="fas fa-map-pin"></i> Clear Sky</div>-->
+          <div class="weather-metrics">
+            <!--<div class="metric-item"><span class="stat-label">Feels Like</span><strong id="feelsLike">--°C</strong></div>
+            <div class="metric-item"><span class="stat-label">UV Index</span><strong id="uvIndex">--</strong></div>
+            <div class="metric-item"><span class="stat-label">Visibility</span><strong id="visibility">-- km</strong></div>-->
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="weather-alerts" id="weatherAlert" style="display: none;">
+      <i class="fas fa-exclamation-triangle"></i><span id="alertMessage">Weather alert</span>
+      <i class="fas fa-times alert-close" onclick="this.parentElement.style.display='none'"></i>
+    </div>
+    <header class="page-header">
+      <h1><i class="fas fa-cloud-sun-rain"></i> Individual Weather Charts</h1>
+      <p>Select time range for all charts: 
+        <select id="globalTimeRange" class="time-select">
+          <option value="10">Last 10 readings</option>
+          <option value="20" selected>Last 20 readings</option>
+          <option value="50">Last 50 readings</option>
+        </select>
+      </p>
+    </header>
+    <div class="individual-charts">
+      <div class="chart-card"><div class="chart-header"><h3><i class="fas fa-thermometer-half"></i> Temperature</h3><span class="current-value" id="tempCurrent">-- °C</span></div><div class="chart-wrapper-sm"><canvas id="tempChartCanvas"></canvas></div></div>
+      <div class="chart-card"><div class="chart-header"><h3><i class="fas fa-tint"></i> Humidity</h3><span class="current-value" id="humidityCurrent">-- %</span></div><div class="chart-wrapper-sm"><canvas id="humidityChartCanvas"></canvas></div></div>
+      <div class="chart-card"><div class="chart-header"><h3><i class="fas fa-tachometer-alt"></i> Pressure</h3><span class="current-value" id="pressureCurrent">-- hPa</span></div><div class="chart-wrapper-sm"><canvas id="pressureChartCanvas"></canvas></div></div>
+      <div class="chart-card"><div class="chart-header"><h3><i class="fas fa-wind"></i> Wind Speed</h3><span class="current-value" id="windSpeedCurrent">-- m/s</span></div><div class="chart-wrapper-sm"><canvas id="windSpeedChartCanvas"></canvas></div></div>
+      <div class="chart-card"><div class="chart-header"><h3><i class="fas fa-compass"></i> Wind Direction</h3><span class="current-value" id="windDirectionCurrent">-- °</span></div><div class="chart-wrapper-sm"><canvas id="windDirectionChartCanvas"></canvas></div></div>
+      <div class="chart-card"><div class="chart-header"><h3><i class="fas fa-cloud-rain"></i> Rainfall</h3><span class="current-value" id="rainfallCurrent">-- mm</span></div><div class="chart-wrapper-sm"><canvas id="rainfallChartCanvas"></canvas></div></div>
+      <div class="chart-card"><div class="chart-header"><h3><i class="fas fa-sun"></i> Light Intensity</h3><span class="current-value" id="lightCurrent">-- lux</span></div><div class="chart-wrapper-sm"><canvas id="lightChartCanvas"></canvas></div></div>
+    </div>
+    <div class="back-to-home"><a href="index.html" class="home-btn"><i class="fas fa-arrow-left"></i> Back to Dashboard</a></div>
+  </main>
+  <script src="multi-channel-config.js"></script>
+  <script src="weather-charts.js"></script>
+  <script>
+    function createWeatherParticles() {
+        const c = document.getElementById('weatherParticles');
+        if(!c) return;
+        for(let i=0;i<30;i++){ const p=document.createElement('div'); p.className='weather-particle'; p.style.left=Math.random()*100+'%'; p.style.width=Math.random()*6+2+'px'; p.style.height=p.style.width; p.style.animationDelay=Math.random()*15+'s'; p.style.animationDuration=Math.random()*10+15+'s'; c.appendChild(p); }
+    }
+    function createWeatherAnimations() {
+        const wc = document.querySelector('.weather-animation');
+        if(!wc) return;
+        for(let i=0;i<4;i++){ const cloud=document.createElement('div'); cloud.className='weather-cloud'; cloud.style.width=Math.random()*200+150+'px'; cloud.style.height='50px'; cloud.style.top=Math.random()*60+'%'; cloud.style.animationDelay=Math.random()*20+'s'; cloud.style.animationDuration=Math.random()*30+50+'s'; wc.appendChild(cloud); }
+        setInterval(()=>{ if(Math.random()>0.7){ for(let i=0;i<8;i++){ const drop=document.createElement('div'); drop.className='weather-rain-drop'; drop.style.left=Math.random()*100+'%'; drop.style.animationDelay=Math.random()*2+'s'; wc.appendChild(drop); setTimeout(()=>drop.remove(),3000); } } },2000);
+    }
+    function updateTime() { const now=new Date(); const timeStr=now.toLocaleTimeString('en-US',{hour12:true, hour:'2-digit', minute:'2-digit', second:'2-digit'}); document.getElementById('currentTime').textContent=timeStr; }
+    document.addEventListener('DOMContentLoaded',()=>{ createWeatherParticles(); createWeatherAnimations(); updateTime(); setInterval(updateTime,1000); });
+  </script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="multi-channel-config.js"></script>
+  <script src="weather-charts.js"></script>
+</body>
+</html>
